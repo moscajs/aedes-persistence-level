@@ -6,6 +6,8 @@ var through = require('through2')
 var msgpack = require('msgpack-lite')
 var callbackStream = require('callback-stream')
 var pump = require('pump')
+var EventEmitter = require('events').EventEmitter
+var inherits = require('util').inherits
 
 var QlobberOpts = {
   wildcard_one: '+',
@@ -29,7 +31,29 @@ function LevelPersistence (db) {
 
   this._db = db
   this._trie = new Qlobber(QlobberOpts)
+  this._ready = false
+
+  var trie = this._trie
+  var that = this
+
+  pump(this._db.createValueStream({
+    gt: SUBSCRIPTIONS,
+    lt: SUBSCRIPTIONS + '\xff',
+    valueEncoding: msgpack
+  }), through.obj(function (chunk, enc, cb) {
+    trie.add(chunk.topic, chunk)
+    cb()
+  }), function (err) {
+    if (err) {
+      that.emit('error', err)
+      return
+    }
+    that._ready = true
+    that.emit('ready')
+  })
 }
+
+inherits(LevelPersistence, EventEmitter)
 
 LevelPersistence.prototype.storeRetained = function (packet, cb) {
   if (packet.payload.length === 0) {
@@ -75,6 +99,11 @@ function addSubToTrie (sub) {
 }
 
 LevelPersistence.prototype.addSubscriptions = function (client, subs, cb) {
+  if (!this._ready) {
+    this.once('ready', this.addSubscriptions.bind(this, client, subs, cb))
+    return
+  }
+
   subs
     .map(withClientId, client)
     .map(addSubToTrie, this._trie)
@@ -162,6 +191,10 @@ LevelPersistence.prototype.countOffline = function (cb) {
 }
 
 LevelPersistence.prototype.subscriptionsByTopic = function (pattern, cb) {
+  if (!this._ready) {
+    this.once('ready', this.subscriptionsByTopic.bind(this, pattern, cb))
+    return this
+  }
   cb(null, this._trie.match(pattern))
 }
 
