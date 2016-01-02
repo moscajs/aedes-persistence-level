@@ -1,6 +1,6 @@
 {
   "name": "aedes-persistence-level",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "LevelDB persistence for Aedes",
   "main": "persistence.js",
   "scripts": {
