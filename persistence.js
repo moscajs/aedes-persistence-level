@@ -201,7 +201,7 @@ LevelPersistence.prototype.subscriptionsByTopic = function (pattern, cb) {
 LevelPersistence.prototype.cleanSubscriptions = function (client, cb) {
   var that = this
   this.subscriptionsByClient(client, function (err, subs) {
-    if (err) { return cb(err, client) }
+    if (err || !subs) { return cb(err, client) }
 
     that.removeSubscriptions(client, subs.map(function (sub) {
       return sub.topic
