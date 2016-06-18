@@ -287,7 +287,7 @@ LevelPersistence.prototype.outgoingClearMessageId = function (client, packet, cb
     batch.del(key)
     batch.del(prekey)
     batch.write(function (err) {
-      cb(err, client)
+      cb(err, packet)
     })
   })
 }
