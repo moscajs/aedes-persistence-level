@@ -277,7 +277,7 @@ LevelPersistence.prototype.outgoingClearMessageId = function (client, packet, cb
   var key = OUTGOINGID + client.id + ':' + packet.messageId
   this._db.get(key, dbopts, function (err, packet) {
     if (err && err.notFound) {
-      return cb(new Error('no such packet'))
+      return cb(null)
     } else if (err) {
       return cb(err)
     }
