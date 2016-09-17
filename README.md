@@ -22,7 +22,7 @@ Example:
 
 ```js
 var level = require('level')
-var aedesPersistencelevel = require('aedes-perisistence-level')
+var aedesPersistencelevel = require('aedes-persistence-level')
 
 // instantiate a persistence instance
 aedesPersistencelevel(level('./mydb'))
