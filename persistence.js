@@ -379,6 +379,21 @@ LevelPersistence.prototype.streamWill = function (brokers) {
   }))
 }
 
+LevelPersistence.prototype.getClientList = function (topic) {
+  var valueStream = this._db.createValueStream({
+    gt: SUBSCRIPTIONS,
+    lt: SUBSCRIPTIONS + '\xff',
+    valueEncoding: msgpack
+  })
+
+  return pump(valueStream, through.obj(function (chunk, enc, cb) {
+    if (chunk.topic === topic) {
+      this.push(chunk.clientId)
+    }
+    cb()
+  }))
+}
+
 LevelPersistence.prototype.destroy = function (cb) {
   this._db.close(cb)
 }
