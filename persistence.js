@@ -161,9 +161,6 @@ LevelPersistence.prototype.subscriptionsByClient = function (client, cb) {
     valueEncoding: msgpack
   }).pipe(callbackStream({ objectMode: true }, function (err, subs) {
     var resubs = subs.map(rmClientId)
-    if (resubs.length === 0) {
-      resubs = null
-    }
     cb(err, resubs, client)
   }))
 }
