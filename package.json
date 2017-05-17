@@ -25,13 +25,15 @@
   },
   "homepage": "https://github.com/mcollina/aedes-persistence-level#readme",
   "devDependencies": {
-    "aedes-persistence": "^2.2.0",
+    "aedes": "^0.26.0",
+    "aedes-persistence": "^3.1.0",
     "concat-stream": "^1.5.1",
     "faucet": "0.0.1",
+    "level": "^1.6.0",
     "memdb": "^1.3.1",
     "mqemitter": "^2.0.0",
     "pre-commit": "^1.1.2",
-    "standard": "^8.0.0",
+    "standard": "^10.0.0",
     "tape": "^4.4.0"
   },
   "dependencies": {

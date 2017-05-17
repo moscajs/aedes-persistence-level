@@ -93,7 +93,17 @@ function delSubToBatch (batch, sub) {
 
 function addSubToTrie (sub) {
   if (sub.qos > 0) {
-    this.add(sub.topic, sub)
+    var matched = this.match(sub.topic)
+    var add = true
+    for (var i = 0; i < matched.length; i++) {
+      if (matched[i].clientId === sub.clientId) {
+        add = false
+        break
+      }
+    }
+    if (add) {
+      this.add(sub.topic, sub)
+    }
   }
   return sub
 }
@@ -156,8 +166,8 @@ function rmClientId (sub) {
 
 LevelPersistence.prototype.subscriptionsByClient = function (client, cb) {
   this._db.createValueStream({
-    gt: SUBSCRIPTIONS,
-    lt: SUBSCRIPTIONS + '\xff',
+    gt: SUBSCRIPTIONS + client.id,
+    lt: SUBSCRIPTIONS + client.id + '\xff',
     valueEncoding: msgpack
   }).pipe(callbackStream({ objectMode: true }, function (err, subs) {
     var resubs = subs.map(rmClientId)
