@@ -166,8 +166,8 @@ function rmClientId (sub) {
 
 LevelPersistence.prototype.subscriptionsByClient = function (client, cb) {
   this._db.createValueStream({
-    gt: SUBSCRIPTIONS,
-    lt: SUBSCRIPTIONS + '\xff',
+    gt: SUBSCRIPTIONS + client.id,
+    lt: SUBSCRIPTIONS + client.id + '\xff',
     valueEncoding: msgpack
   }).pipe(callbackStream({ objectMode: true }, function (err, subs) {
     var resubs = subs.map(rmClientId)
