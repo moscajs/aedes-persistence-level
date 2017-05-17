@@ -93,7 +93,17 @@ function delSubToBatch (batch, sub) {
 
 function addSubToTrie (sub) {
   if (sub.qos > 0) {
-    this.add(sub.topic, sub)
+    var matched = this.match(sub.topic)
+    var add = true
+    for (var i = 0; i < matched.length; i++) {
+      if (matched[i].clientId === sub.clientId) {
+        add = false
+        break
+      }
+    }
+    if (add) {
+      this.add(sub.topic, sub)
+    }
   }
   return sub
 }
