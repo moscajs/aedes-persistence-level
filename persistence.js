@@ -64,11 +64,22 @@ LevelPersistence.prototype.storeRetained = function (packet, cb) {
 }
 
 LevelPersistence.prototype.createRetainedStream = function (pattern) {
+  var qlobber = new Qlobber(QlobberOpts)
+  qlobber.add(pattern, true)
+
   return this._db.createValueStream({
     gt: 'retained:',
     lt: 'retained\xff',
     valueEncoding: msgpack
-  })
+  }).pipe(
+    through.obj(
+      function (packet, encoding, deliver) {
+        if (qlobber.match(packet.topic).length) {
+          deliver(null, packet)
+        }
+      }
+    )
+  )
 }
 
 function withClientId (sub) {
