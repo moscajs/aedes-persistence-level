@@ -8,6 +8,7 @@ var callbackStream = require('callback-stream')
 var pump = require('pump')
 var EventEmitter = require('events').EventEmitter
 var inherits = require('util').inherits
+var multistream = require('multistream')
 
 var QlobberOpts = {
   wildcard_one: '+',
@@ -63,23 +64,33 @@ LevelPersistence.prototype.storeRetained = function (packet, cb) {
   }
 }
 
+LevelPersistence.prototype.createRetainedStreamCombi = function (patterns) {
+  var that = this
+  var streams = patterns.map(function (p) {
+    return that.createRetainedStream(p)
+  })
+  return multistream.obj(streams)
+}
+
 LevelPersistence.prototype.createRetainedStream = function (pattern) {
   var qlobber = new Qlobber(QlobberOpts)
   qlobber.add(pattern, true)
 
-  return this._db.createValueStream({
+  var res = through.obj(function (packet, encoding, deliver) {
+    if (qlobber.match(packet.topic).length) {
+      deliver(null, packet)
+    } else {
+      deliver()
+    }
+  })
+
+  pump(this._db.createValueStream({
     gt: 'retained:',
     lt: 'retained\xff',
     valueEncoding: msgpack
-  }).pipe(
-    through.obj(
-      function (packet, encoding, deliver) {
-        if (qlobber.match(packet.topic).length) {
-          deliver(null, packet)
-        }
-      }
-    )
-  )
+  }), res)
+
+  return res
 }
 
 function withClientId (sub) {
@@ -151,7 +162,7 @@ function delSubFromTrie (sub) {
 }
 
 function matching (sub) {
-  return sub.topic === this.topic
+  return sub.topic === this.topic && sub.clientId === this.clientId
 }
 
 function rmSub (sub) {
