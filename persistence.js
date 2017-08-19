@@ -114,18 +114,20 @@ function delSubToBatch (batch, sub) {
 }
 
 function addSubToTrie (sub) {
-  if (sub.qos > 0) {
-    var matched = this.match(sub.topic)
-    var add = true
-    for (var i = 0; i < matched.length; i++) {
-      if (matched[i].clientId === sub.clientId) {
+  var matched = this.match(sub.topic)
+  var add = sub.qos > 0
+  for (var i = 0; i < matched.length; i++) {
+    if (matched[i].clientId === sub.clientId) {
+      if (matched[i].qos !== sub.qos) {
+        this.remove(sub.topic, matched[i])
+      } else {
         add = false
-        break
       }
+      break
     }
-    if (add) {
-      this.add(sub.topic, sub)
-    }
+  }
+  if (add) {
+    this.add(sub.topic, sub)
   }
   return sub
 }
@@ -244,8 +246,17 @@ LevelPersistence.prototype.cleanSubscriptions = function (client, cb) {
 }
 
 LevelPersistence.prototype.outgoingEnqueue = function (sub, packet, cb) {
-  var key = OUTGOING + sub.clientId + ':' + packet.brokerId + ':' + packet.brokerCounter
-  this._db.put(key, new Packet(packet), dbopts, cb)
+  this.outgoingEnqueueCombi([sub], packet, cb)
+}
+
+LevelPersistence.prototype.outgoingEnqueueCombi = function (subs, packet, cb) {
+  var key
+  var batch = this._db.batch()
+  for (var i = 0; i < subs.length; i++) {
+    key = OUTGOING + subs[i].clientId + ':' + packet.brokerId + ':' + packet.brokerCounter
+    batch = batch.put(key, new Packet(packet), dbopts)
+  }
+  batch.write(cb)
 }
 
 function updateWithBrokerData (that, client, packet, cb) {
@@ -326,8 +337,8 @@ LevelPersistence.prototype.outgoingClearMessageId = function (client, packet, cb
 
 LevelPersistence.prototype.outgoingStream = function (client) {
   return this._db.createValueStream({
-    gt: OUTGOING,
-    lt: OUTGOING + '\xff',
+    gt: OUTGOING + client.id,
+    lt: OUTGOING + client.id + ':\xff',
     valueEncoding: msgpack
   })
 }
