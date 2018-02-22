@@ -42,7 +42,7 @@
     "msgpack-lite": "^0.1.26",
     "multistream": "^2.1.0",
     "pump": "^3.0.0",
-    "qlobber": "^1.8.0",
+    "qlobber": "^3.0.0",
     "through2": "^2.0.3"
   }
 }
