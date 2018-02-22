@@ -105,28 +105,30 @@ function toSubKey (sub) {
   return SUBSCRIPTIONS + sub.clientId + ':' + sub.topic
 }
 
-function addSubToBatch (batch, sub) {
-  return batch.put(toSubKey(sub), sub, dbopts)
-}
-
-function delSubToBatch (batch, sub) {
-  return batch.del(toSubKey(sub))
-}
-
 function addSubToTrie (sub) {
-  if (sub.qos > 0) {
-    var matched = this.match(sub.topic)
-    var add = true
+  var add
+  var matched = this.match(sub.topic)
+  if (matched.length > 0) {
+    add = true
     for (var i = 0; i < matched.length; i++) {
-      if (matched[i].clientId === sub.clientId) {
+      if (matched[i].clientId === sub.clientId && matched[i].qos === sub.qos) {
         add = false
         break
+      } else if (matched[i].qos !== sub.qos) {
+        this.remove(matched[i].topic, matched[i])
+        if (sub.qos === 0) {
+          add = false
+        }
       }
     }
-    if (add) {
-      this.add(sub.topic, sub)
-    }
+  } else if (sub.qos > 0) {
+    add = true
   }
+
+  if (add) {
+    this.add(sub.topic, sub)
+  }
+
   return sub
 }
 
@@ -136,13 +138,22 @@ LevelPersistence.prototype.addSubscriptions = function (client, subs, cb) {
     return
   }
 
-  subs
+  subs = subs
     .map(withClientId, client)
     .map(addSubToTrie, this._trie)
-    .reduce(addSubToBatch, this._db.batch())
-    .write(function (err) {
-      cb(err, client)
-    })
+
+  let opArray = []
+  subs.forEach(function (sub) {
+    let ops = {}
+    ops.type = 'put'
+    ops.key = toSubKey(sub)
+    ops.value = sub
+    opArray.push(ops)
+  })
+
+  this._db.batch(opArray, dbopts, function (err) {
+    cb(err, client)
+  })
 }
 
 function toSubObj (topic) {
@@ -170,13 +181,20 @@ function rmSub (sub) {
 }
 
 LevelPersistence.prototype.removeSubscriptions = function (client, subs, cb) {
-  subs
+  subs = subs
     .map(toSubObj, client)
     .map(delSubFromTrie, this._trie)
-    .reduce(delSubToBatch, this._db.batch())
-    .write(function (err) {
-      cb(err, client)
-    })
+  let opArray = []
+  subs.forEach(function (sub) {
+    let ops = {}
+    ops.type = 'del'
+    ops.key = toSubKey(sub)
+    ops.value = sub
+    opArray.push(ops)
+  })
+  this._db.batch(opArray, dbopts, function (err) {
+    cb(err, client)
+  })
 }
 
 function rmClientId (sub) {
@@ -246,6 +264,25 @@ LevelPersistence.prototype.cleanSubscriptions = function (client, cb) {
 LevelPersistence.prototype.outgoingEnqueue = function (sub, packet, cb) {
   var key = OUTGOING + sub.clientId + ':' + packet.brokerId + ':' + packet.brokerCounter
   this._db.put(key, new Packet(packet), dbopts, cb)
+}
+
+LevelPersistence.prototype.outgoingEnqueueCombi = function (subs, packet, cb) {
+  if (!subs || subs.length === 0) {
+    return cb(null, packet)
+  }
+  var count = 0
+  for (var i = 0; i < subs.length; i++) {
+    this.outgoingEnqueue(subs[i], packet, function (err) {
+      if (!err) {
+        count++
+        if (count === subs.length) {
+          cb(null, packet)
+        }
+      } else {
+        cb(err)
+      }
+    })
+  }
 }
 
 function updateWithBrokerData (that, client, packet, cb) {
@@ -325,9 +362,10 @@ LevelPersistence.prototype.outgoingClearMessageId = function (client, packet, cb
 }
 
 LevelPersistence.prototype.outgoingStream = function (client) {
+  var key = OUTGOING + client.id
   return this._db.createValueStream({
-    gt: OUTGOING,
-    lt: OUTGOING + '\xff',
+    gt: key,
+    lt: key + '\xff',
     valueEncoding: msgpack
   })
 }
