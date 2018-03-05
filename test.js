@@ -73,7 +73,6 @@ test('outgoing update after enqueuing a possible offline message', function (t) 
     cmd: 'pubrel',
     messageId: 7
   }
-  
   // Enqueue an offline packet
   instance.outgoingEnqueue(client, packet, function (err, packet1) {
     t.error(err)
