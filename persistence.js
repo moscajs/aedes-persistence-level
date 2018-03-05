@@ -298,17 +298,18 @@ function updateWithBrokerData (that, client, packet, cb) {
       return
     }
 
-    var batch = that._db.batch()
-
     if (decoded.messageId > 0) {
-      batch.del(OUTGOINGID + client.id + ':' + decoded.messageId)
+      that._db.del(OUTGOINGID + client.id + ':' + decoded.messageId)
     }
 
-    batch.put(postkey, packet, dbopts)
-    batch.put(prekey, packet, dbopts)
-
-    batch.write(function (err) {
-      cb(err, client, packet)
+    that._db.put(postkey, packet, dbopts, function (err) {
+      if (err) {
+        cb(err, client, packet)
+      } else {
+        that._db.put(prekey, packet, dbopts, function (err) {
+          cb(err, client, packet)
+        })
+      }
     })
   })
 }
