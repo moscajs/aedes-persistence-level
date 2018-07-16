@@ -111,13 +111,15 @@ function addSubToTrie (sub) {
   if (matched.length > 0) {
     add = true
     for (var i = 0; i < matched.length; i++) {
-      if (matched[i].clientId === sub.clientId && matched[i].qos === sub.qos) {
-        add = false
-        break
-      } else if (matched[i].qos !== sub.qos) {
-        this.remove(matched[i].topic, matched[i])
-        if (sub.qos === 0) {
+      if (matched[i].clientId === sub.clientId) {
+        if (matched[i].qos === sub.qos) {
           add = false
+          break
+        } else {
+          this.remove(matched[i].topic, matched[i])
+          if (sub.qos === 0) {
+            add = false
+          }
         }
       }
     }
@@ -141,7 +143,6 @@ LevelPersistence.prototype.addSubscriptions = function (client, subs, cb) {
   subs = subs
     .map(withClientId, client)
     .map(addSubToTrie, this._trie)
-
   let opArray = []
   subs.forEach(function (sub) {
     let ops = {}
