@@ -3,7 +3,12 @@
 var test = require('tape').test
 var persistence = require('./')
 var abs = require('aedes-persistence/abstract')
-var memdb = require('memdb')
+var levelup = require('levelup')
+var memdown = require('memdown')
+
+function memdb () {
+  return levelup(memdown())
+}
 
 abs({
   test: test,
