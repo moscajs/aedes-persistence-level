@@ -87,3 +87,79 @@ test('outgoing update after enqueuing a possible offline message', function (t) 
     })
   })
 })
+
+test('Dont replace subscriptions with different QoS if client id is different', function (t) {
+  var db = memdb()
+  var instance = persistence(db)
+  var client = {
+    id: 'test'
+  }
+
+  var client1 = {
+    id: 'test.1'
+  }
+
+  var sub1 = [{
+    topic: 'test/+/dev/#',
+    qos: 2
+  }]
+
+  var sub2 = [{
+    topic: 'test/television/dev/about',
+    qos: 1
+  }]
+
+  instance.addSubscriptions(client, sub1, function (err) {
+    t.notOk(err, 'no error')
+    instance.addSubscriptions(client1, sub2, function (err) {
+      t.notOk(err, 'no error')
+      instance.subscriptionsByTopic('test/television/dev/about', function (err, resubs) {
+        t.notOk(err, 'no error')
+        t.deepEqual(resubs, [{
+          topic: 'test/television/dev/about',
+          clientId: 'test.1',
+          qos: 1
+        }, {
+          topic: 'test/+/dev/#',
+          clientId: 'test',
+          qos: 2
+        }])
+        instance.destroy(t.end.bind(t))
+      })
+    })
+  })
+})
+
+test('Replace subscriptions with different QoS if client id is same', function (t) {
+  var db = memdb()
+  var instance = persistence(db)
+  var client = {
+    id: 'test'
+  }
+
+  var sub1 = [{
+    topic: 'test/+/dev/#',
+    qos: 2
+  }]
+
+  var sub2 = [{
+    topic: 'test/television/dev/about',
+    qos: 1
+  }]
+
+  instance.addSubscriptions(client, sub1, function (err) {
+    t.notOk(err, 'no error')
+    instance.addSubscriptions(client, sub2, function (err) {
+      t.notOk(err, 'no error')
+      instance.subscriptionsByTopic('test/television/dev/about', function (err, resubs) {
+        t.notOk(err, 'no error')
+        t.deepEqual(resubs, [{
+          topic: 'test/television/dev/about',
+          clientId: 'test',
+          qos: 1
+        }])
+        instance.destroy(t.end.bind(t))
+      })
+    })
+  })
+})
