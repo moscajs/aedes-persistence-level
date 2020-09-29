@@ -26,6 +26,13 @@ var encodingOption = {
   valueEncoding: 'binary'
 }
 
+function createValueStream (db, start) {
+  return db.createValueStream(Object.assign({
+    gt: start,
+    lt: start + '\xff'
+  }, encodingOption))
+}
+
 function LevelPersistence (db) {
   if (!(this instanceof LevelPersistence)) {
     return new LevelPersistence(db)
@@ -38,10 +45,7 @@ function LevelPersistence (db) {
   var trie = this._trie
   var that = this
 
-  pump(this._db.createValueStream(Object.assign({
-    gt: SUBSCRIPTIONS,
-    lt: SUBSCRIPTIONS + '\xff'
-  }, encodingOption)), through.obj(function (blob, enc, cb) {
+  pump(createValueStream(this._db, SUBSCRIPTIONS), through.obj(function (blob, enc, cb) {
     var chunk = msgpack.decode(blob)
     trie.add(chunk.topic, chunk)
     cb()
@@ -86,10 +90,7 @@ LevelPersistence.prototype.createRetainedStream = function (pattern) {
     }
   })
 
-  pump(this._db.createValueStream(Object.assign({
-    gt: RETAINED,
-    lt: RETAINED + '\xff'
-  }, encodingOption)), res)
+  pump(createValueStream(this._db, RETAINED), res)
 
   return res
 }
@@ -207,27 +208,22 @@ function rmClientId (sub) {
 }
 
 LevelPersistence.prototype.subscriptionsByClient = function (client, cb) {
-  this._db.createValueStream(Object.assign({
-    gt: SUBSCRIPTIONS + client.id,
-    lt: SUBSCRIPTIONS + client.id + '\xff'
-  }, encodingOption)).pipe(callbackStream({ objectMode: true }, function (err, blob) {
-    var subs = blob.map(msgpack.decode)
-    var resubs = subs.map(rmClientId)
-    if (resubs.length === 0) {
-      resubs = null
-    }
-    cb(err, resubs, client)
-  }))
+  createValueStream(this._db, SUBSCRIPTIONS + client.id)
+    .pipe(callbackStream({ objectMode: true }, function (err, blob) {
+      var subs = blob.map(msgpack.decode)
+      var resubs = subs.map(rmClientId)
+      if (resubs.length === 0) {
+        resubs = null
+      }
+      cb(err, resubs, client)
+    }))
 }
 
 LevelPersistence.prototype.countOffline = function (cb) {
   var clients = 0
   var subs = 0
   var lastClient = null
-  pump(this._db.createValueStream(Object.assign({
-    gt: SUBSCRIPTIONS,
-    lt: SUBSCRIPTIONS + '\xff'
-  }, encodingOption)), through.obj(function (blob, enc, cb) {
+  pump(createValueStream(this._db, SUBSCRIPTIONS), through.obj(function (blob, enc, cb) {
     var sub = msgpack.decode(blob)
     if (lastClient !== sub.clientId) {
       lastClient = sub.clientId
@@ -371,10 +367,7 @@ LevelPersistence.prototype.outgoingClearMessageId = function (client, packet, cb
 
 LevelPersistence.prototype.outgoingStream = function (client) {
   var key = OUTGOING + client.id
-  return pump(this._db.createValueStream(Object.assign({
-    gt: key,
-    lt: key + '\xff'
-  }, encodingOption)), through.obj(function (blob, enc, cb) {
+  return pump(createValueStream(this._db, key), through.obj(function (blob, enc, cb) {
     cb(null, msgpack.decode(blob))
   }))
 }
@@ -440,10 +433,7 @@ LevelPersistence.prototype.delWill = function (client, cb) {
 }
 
 LevelPersistence.prototype.streamWill = function (brokers) {
-  var valueStream = this._db.createValueStream(Object.assign({
-    gt: WILL,
-    lt: WILL + '\xff'
-  }, encodingOption))
+  var valueStream = createValueStream(this._db, WILL)
 
   if (!brokers) {
     return pump(valueStream, through.obj(function (blob, enc, cb) {
@@ -461,10 +451,7 @@ LevelPersistence.prototype.streamWill = function (brokers) {
 }
 
 LevelPersistence.prototype.getClientList = function (topic) {
-  var valueStream = this._db.createValueStream(Object.assign({
-    gt: SUBSCRIPTIONS,
-    lt: SUBSCRIPTIONS + '\xff'
-  }, encodingOption))
+  var valueStream = createValueStream(this._db, SUBSCRIPTIONS)
 
   return pump(valueStream, through.obj(function (blob, enc, cb) {
     var chunk = msgpack.decode(blob)
