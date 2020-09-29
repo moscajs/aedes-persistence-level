@@ -25,25 +25,25 @@
   },
   "homepage": "https://github.com/mcollina/aedes-persistence-level#readme",
   "devDependencies": {
-    "aedes": "^0.35.0",
-    "aedes-persistence": "^5.1.1",
-    "concat-stream": "^1.6.2",
+    "aedes": "^0.42.6",
+    "aedes-persistence": "^8.1.1",
+    "concat-stream": "^2.0.0",
     "faucet": "0.0.1",
-    "level": "^4.0.0",
-    "levelup": "^3.1.1",
-    "memdown": "^3.0.0",
-    "mqemitter": "^2.2.0",
+    "level": "^6.0.1",
+    "levelup": "^4.4.0",
+    "memdown": "^5.1.0",
+    "mqemitter": "^4.4.0",
     "pre-commit": "^1.2.2",
-    "standard": "^11.0.1",
-    "tape": "^4.9.1"
+    "standard": "^14.3.4",
+    "tape": "^4.13.3"
   },
   "dependencies": {
-    "aedes-packet": "^1.0.0",
+    "aedes-packet": "^2.3.1",
     "callback-stream": "^1.1.0",
     "msgpack-lite": "^0.1.26",
-    "multistream": "^2.1.1",
+    "multistream": "^4.0.0",
     "pump": "^3.0.0",
-    "qlobber": "^3.0.2",
-    "through2": "^2.0.3"
+    "qlobber": "^5.0.3",
+    "through2": "^4.0.2"
   }
 }
