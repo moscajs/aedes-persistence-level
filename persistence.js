@@ -87,8 +87,8 @@ LevelPersistence.prototype.createRetainedStream = function (pattern) {
   })
 
   pump(this._db.createValueStream(Object.assign({
-    gt: 'retained:',
-    lt: 'retained\xff'
+    gt: RETAINED,
+    lt: RETAINED + '\xff'
   }, encodingOption)), res)
 
   return res
