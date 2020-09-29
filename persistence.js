@@ -292,7 +292,7 @@ function updateWithBrokerData (that, client, packet, cb) {
   var prekey = OUTGOING + client.id + ':' + packet.brokerId + ':' + packet.brokerCounter
   var postkey = OUTGOINGID + client.id + ':' + packet.messageId
 
-  that._db.get(prekey, function (err, blob) {
+  that._db.get(prekey, { valueEncoding: 'binary' }, function (err, blob) {
     if (err && err.notFound) {
       cb(new Error('no such packet'), client, packet)
       return
@@ -321,7 +321,7 @@ function updateWithBrokerData (that, client, packet, cb) {
 
 function augmentWithBrokerData (that, client, packet, cb) {
   var postkey = OUTGOINGID + client.id + ':' + packet.messageId
-  that._db.get(postkey, function (err, blob) {
+  that._db.get(postkey, { valueEncoding: 'binary' }, function (err, blob) {
     if (err && err.notFound) {
       return cb(new Error('no such packet'))
     } else if (err) {
@@ -352,7 +352,7 @@ LevelPersistence.prototype.outgoingUpdate = function (client, packet, cb) {
 LevelPersistence.prototype.outgoingClearMessageId = function (client, packet, cb) {
   var that = this
   var key = OUTGOINGID + client.id + ':' + packet.messageId
-  this._db.get(key, function (err, blob) {
+  this._db.get(key, { valueEncoding: 'binary' }, function (err, blob) {
     if (err && err.notFound) {
       return cb(null)
     } else if (err) {
@@ -390,7 +390,7 @@ LevelPersistence.prototype.incomingStorePacket = function (client, packet, cb) {
 
 LevelPersistence.prototype.incomingGetPacket = function (client, packet, cb) {
   var key = INCOMING + client.id + ':' + packet.messageId
-  this._db.get(key, function (err, blob) {
+  this._db.get(key, { valueEncoding: 'binary' }, function (err, blob) {
     if (err && err.notFound) {
       cb(new Error('no such packet'), client)
     } else if (err) {
@@ -419,7 +419,7 @@ LevelPersistence.prototype.putWill = function (client, packet, cb) {
 
 LevelPersistence.prototype.getWill = function (client, cb) {
   var key = WILL + client.id
-  this._db.get(key, function (err, blob) {
+  this._db.get(key, { valueEncoding: 'binary' }, function (err, blob) {
     if (err && err.notFound) {
       cb(null, null, client)
     } else {
@@ -431,7 +431,7 @@ LevelPersistence.prototype.getWill = function (client, cb) {
 LevelPersistence.prototype.delWill = function (client, cb) {
   var key = WILL + client.id
   var that = this
-  this._db.get(key, function (err, blob) {
+  this._db.get(key, { valueEncoding: 'binary' }, function (err, blob) {
     if (err) {
       return cb(err, null, client)
     }
