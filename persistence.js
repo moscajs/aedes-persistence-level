@@ -13,7 +13,8 @@ var multistream = require('multistream')
 var QlobberOpts = {
   wildcard_one: '+',
   wildcard_some: '#',
-  separator: '/'
+  separator: '/',
+  match_empty_levels: true
 }
 var RETAINED = 'retained:'
 var SUBSCRIPTIONS = 'subscriptions:'
