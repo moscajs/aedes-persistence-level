@@ -143,9 +143,9 @@ LevelPersistence.prototype.addSubscriptions = function (client, subs, cb) {
   subs = subs
     .map(withClientId, client)
     .map(addSubToTrie, this._trie)
-  let opArray = []
+  const opArray = []
   subs.forEach(function (sub) {
-    let ops = {}
+    const ops = {}
     ops.type = 'put'
     ops.key = toSubKey(sub)
     ops.value = msgpack.encode(sub)
@@ -185,9 +185,9 @@ LevelPersistence.prototype.removeSubscriptions = function (client, subs, cb) {
   subs = subs
     .map(toSubObj, client)
     .map(delSubFromTrie, this._trie)
-  let opArray = []
+  const opArray = []
   subs.forEach(function (sub) {
-    let ops = {}
+    const ops = {}
     ops.type = 'del'
     ops.key = toSubKey(sub)
     ops.value = msgpack.encode(sub)
