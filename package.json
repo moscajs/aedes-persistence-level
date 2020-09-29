@@ -6,6 +6,7 @@
   "scripts": {
     "test": "standard && tape test.js | faucet"
   },
+  "precommit": "test",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mcollina/aedes-persistence-level.git"
@@ -30,6 +31,7 @@
     "faucet": "0.0.1",
     "level": "^6.0.1",
     "mqemitter": "^2.2.0",
+    "pre-commit": "^1.2.2",
     "standard": "^11.0.1",
     "tape": "^4.9.1",
     "tempy": "^0.7.1"
