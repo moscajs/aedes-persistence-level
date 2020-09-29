@@ -1,4 +1,4 @@
-# aedes-persistence-level&nbsp;&nbsp;[![Build Status](https://travis-ci.org/mcollina/aedes-persistence-level.svg)](https://travis-ci.org/mcollina/aedes-persistence-level)
+# aedes-persistence-level
 
 [Aedes][aedes] [persistence][persistence], backed by [levelup][levelup].
 
