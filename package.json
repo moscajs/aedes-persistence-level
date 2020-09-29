@@ -33,7 +33,8 @@
     "memdown": "^3.0.0",
     "mqemitter": "^2.2.0",
     "standard": "^11.0.1",
-    "tape": "^4.9.1"
+    "tape": "^4.9.1",
+    "tempy": "^0.7.1"
   },
   "dependencies": {
     "aedes-packet": "^1.0.0",
