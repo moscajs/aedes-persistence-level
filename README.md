@@ -1,5 +1,7 @@
 # aedes-persistence-level
 
+![.github/workflows/ci.yml](https://github.com/moscajs/aedes-persistence-level/workflows/.github/workflows/ci.yml/badge.svg)
+
 [Aedes][aedes] [persistence][persistence], backed by [levelup][levelup].
 
 See [aedes-persistence][persistence] for the full API, and [Aedes][aedes] for usage.
