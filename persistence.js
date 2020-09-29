@@ -62,10 +62,11 @@ function LevelPersistence (db) {
 inherits(LevelPersistence, EventEmitter)
 
 LevelPersistence.prototype.storeRetained = function (packet, cb) {
+  const key = `${RETAINED}${packet.topic}`
   if (packet.payload.length === 0) {
-    this._db.del(RETAINED + packet.topic, cb)
+    this._db.del(key, cb)
   } else {
-    this._db.put(RETAINED + packet.topic, msgpack.encode(packet), cb)
+    this._db.put(key, msgpack.encode(packet), cb)
   }
 }
 
@@ -104,7 +105,7 @@ function withClientId (sub) {
 }
 
 function toSubKey (sub) {
-  return SUBSCRIPTIONS + sub.clientId + ':' + sub.topic
+  return `${SUBSCRIPTIONS}${sub.clientId}:${sub.topic}`
 }
 
 function addSubToTrie (sub) {
@@ -208,7 +209,7 @@ function rmClientId (sub) {
 }
 
 LevelPersistence.prototype.subscriptionsByClient = function (client, cb) {
-  createValueStream(this._db, SUBSCRIPTIONS + client.id)
+  createValueStream(this._db, `${SUBSCRIPTIONS}${client.id}`)
     .pipe(callbackStream({ objectMode: true }, function (err, blob) {
       const subs = blob.map(msgpack.decode)
       let resubs = subs.map(rmClientId)
@@ -260,7 +261,7 @@ LevelPersistence.prototype.cleanSubscriptions = function (client, cb) {
 }
 
 LevelPersistence.prototype.outgoingEnqueue = function (sub, packet, cb) {
-  const key = OUTGOING + sub.clientId + ':' + packet.brokerId + ':' + packet.brokerCounter
+  const key = `${OUTGOING}${sub.clientId}:${packet.brokerId}:${packet.brokerCounter}`
   this._db.put(key, msgpack.encode(new Packet(packet)), cb)
 }
 
@@ -284,8 +285,8 @@ LevelPersistence.prototype.outgoingEnqueueCombi = function (subs, packet, cb) {
 }
 
 function updateWithBrokerData (that, client, packet, cb) {
-  const prekey = OUTGOING + client.id + ':' + packet.brokerId + ':' + packet.brokerCounter
-  const postkey = OUTGOINGID + client.id + ':' + packet.messageId
+  const prekey = `${OUTGOING}${client.id}:${packet.brokerId}:${packet.brokerCounter}`
+  const postkey = `${OUTGOINGID}${client.id}:${packet.messageId}`
 
   that._db.get(prekey, encodingOption, function (err, blob) {
     if (err && err.notFound) {
@@ -299,7 +300,7 @@ function updateWithBrokerData (that, client, packet, cb) {
     const decoded = msgpack.decode(blob)
 
     if (decoded.messageId > 0) {
-      that._db.del(OUTGOINGID + client.id + ':' + decoded.messageId)
+      that._db.del(`${OUTGOINGID}${client.id}:${decoded.messageId}`)
     }
 
     that._db.put(postkey, msgpack.encode(packet), function (err) {
@@ -315,7 +316,7 @@ function updateWithBrokerData (that, client, packet, cb) {
 }
 
 function augmentWithBrokerData (that, client, packet, cb) {
-  const postkey = OUTGOINGID + client.id + ':' + packet.messageId
+  const postkey = `${OUTGOINGID}${client.id}:${packet.messageId}`
   that._db.get(postkey, encodingOption, function (err, blob) {
     if (err && err.notFound) {
       return cb(new Error('no such packet'))
@@ -346,7 +347,7 @@ LevelPersistence.prototype.outgoingUpdate = function (client, packet, cb) {
 
 LevelPersistence.prototype.outgoingClearMessageId = function (client, packet, cb) {
   const that = this
-  const key = OUTGOINGID + client.id + ':' + packet.messageId
+  const key = `${OUTGOINGID}${client.id}:${packet.messageId}`
   this._db.get(key, encodingOption, function (err, blob) {
     if (err && err.notFound) {
       return cb(null)
@@ -355,7 +356,7 @@ LevelPersistence.prototype.outgoingClearMessageId = function (client, packet, cb
     }
 
     const packet = msgpack.decode(blob)
-    const prekey = 'outgoing:' + client.id + ':' + packet.brokerId + ':' + packet.brokerCounter
+    const prekey = `${OUTGOING}${client.id}:${packet.brokerId}:${packet.brokerCounter}`
     const batch = that._db.batch()
     batch.del(key)
     batch.del(prekey)
@@ -366,21 +367,21 @@ LevelPersistence.prototype.outgoingClearMessageId = function (client, packet, cb
 }
 
 LevelPersistence.prototype.outgoingStream = function (client) {
-  const key = OUTGOING + client.id
+  const key = `${OUTGOING}${client.id}`
   return pump(createValueStream(this._db, key), through.obj(function (blob, enc, cb) {
     cb(null, msgpack.decode(blob))
   }))
 }
 
 LevelPersistence.prototype.incomingStorePacket = function (client, packet, cb) {
-  const key = INCOMING + client.id + ':' + packet.messageId
+  const key = `${INCOMING}${client.id}:${packet.messageId}`
   const newp = new Packet(packet)
   newp.messageId = packet.messageId
   this._db.put(key, msgpack.encode(newp), cb)
 }
 
 LevelPersistence.prototype.incomingGetPacket = function (client, packet, cb) {
-  const key = INCOMING + client.id + ':' + packet.messageId
+  const key = `${INCOMING}${client.id}:${packet.messageId}`
   this._db.get(key, encodingOption, function (err, blob) {
     if (err && err.notFound) {
       cb(new Error('no such packet'), client)
@@ -393,12 +394,12 @@ LevelPersistence.prototype.incomingGetPacket = function (client, packet, cb) {
 }
 
 LevelPersistence.prototype.incomingDelPacket = function (client, packet, cb) {
-  const key = INCOMING + client.id + ':' + packet.messageId
+  const key = `${INCOMING}${client.id}:${packet.messageId}`
   this._db.del(key, cb)
 }
 
 LevelPersistence.prototype.putWill = function (client, packet, cb) {
-  const key = WILL + client.id
+  const key = `${WILL}${client.id}`
 
   packet.brokerId = this.broker.id
   packet.clientId = client.id
@@ -409,7 +410,7 @@ LevelPersistence.prototype.putWill = function (client, packet, cb) {
 }
 
 LevelPersistence.prototype.getWill = function (client, cb) {
-  const key = WILL + client.id
+  const key = `${WILL}${client.id}`
   this._db.get(key, encodingOption, function (err, blob) {
     if (err && err.notFound) {
       cb(null, null, client)
@@ -420,7 +421,7 @@ LevelPersistence.prototype.getWill = function (client, cb) {
 }
 
 LevelPersistence.prototype.delWill = function (client, cb) {
-  const key = WILL + client.id
+  const key = `${WILL}${client.id}`
   const that = this
   this._db.get(key, encodingOption, function (err, blob) {
     if (err) {
