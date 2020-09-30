@@ -3,22 +3,22 @@
 var test = require('tape').test
 var persistence = require('./')
 var abs = require('aedes-persistence/abstract')
-var levelup = require('levelup')
-var memdown = require('memdown')
+var level = require('level')
+var tempy = require('tempy')
 
-function memdb () {
-  return levelup(memdown())
+function leveldb () {
+  return level(tempy.directory())
 }
 
 abs({
   test: test,
   persistence: function () {
-    return persistence(memdb())
+    return persistence(leveldb())
   }
 })
 
 test('restore', function (t) {
-  var db = memdb()
+  var db = leveldb()
   var instance = persistence(db)
   var client = {
     id: 'abcde'
@@ -55,7 +55,7 @@ test('restore', function (t) {
 })
 
 test('outgoing update after enqueuing a possible offline message', function (t) {
-  var db = memdb()
+  var db = leveldb()
   var instance = persistence(db)
   var client = {
     clientId: 'abcde'
@@ -94,7 +94,7 @@ test('outgoing update after enqueuing a possible offline message', function (t) 
 })
 
 test('Dont replace subscriptions with different QoS if client id is different', function (t) {
-  var db = memdb()
+  var db = leveldb()
   var instance = persistence(db)
   var client = {
     id: 'test'
@@ -136,7 +136,7 @@ test('Dont replace subscriptions with different QoS if client id is different', 
 })
 
 test('Replace subscriptions with different QoS if client id is same', function (t) {
-  var db = memdb()
+  var db = leveldb()
   var instance = persistence(db)
   var client = {
     id: 'test'
