@@ -5,8 +5,8 @@ const msgpack = require('msgpack-lite')
 const callbackStream = require('callback-stream')
 const pump = require('pump')
 const EventEmitter = require('events').EventEmitter
-// const inherits = require('util').inherits
 const multistream = require('multistream')
+const { Readable } = require('stream')
 
 const QlobberOpts = {
   wildcard_one: '+',
@@ -24,11 +24,76 @@ const encodingOption = {
   valueEncoding: 'binary'
 }
 
-function createValueStream (db, start) {
-  return db.createValueStream(Object.assign({
+function dbValues (db, start) {
+  const opts = Object.assign({
     gt: start,
     lt: `${start}\xff`
-  }, encodingOption))
+  }, encodingOption)
+  // Level 8
+  if (typeof db.values === 'function') {
+    return db.values(opts)
+  }
+  // level 7
+  if (Symbol.iterator in db.iterator) {
+    return dbValuesLevel7(db, start, opts)
+  }
+  return dbValuesLevel6(db, start, opts)
+}
+
+async function * dbValuesLevel7 (db, start, opts) {
+  console.log('level7', typeof db.iterator)
+  for await (const [, value] of db.iterator(opts)) {
+    yield value
+  }
+}
+
+function nextLevel6 (iter) {
+  return new Promise((resolve, reject) => {
+    iter.next((err, key, value) => {
+      if (err) {
+        reject(err)
+        return
+      }
+      resolve({ key, value })
+    })
+  })
+}
+
+function endLevel6 (iter) {
+  return new Promise((resolve, reject) => {
+    iter.end(resolve, reject)
+  })
+}
+
+async function * dbValuesLevel6 (db, start, opts) {
+  console.log('level6', typeof db.iterator)
+
+  const iter = db.iterator(opts)
+  let hasValue = true
+  while (hasValue) {
+    const item = await nextLevel6(iter)
+    if (item?.value) {
+      yield item.value
+    } else {
+      await endLevel6(iter)
+      hasValue = false
+    }
+  }
+}
+
+function createValueStream (db, start) {
+  return Readable.from(dbValues(db, start))
+}
+
+async function loadSubscriptions (db, trie) {
+  try {
+    for await (const blob of dbValues(db, SUBSCRIPTIONS)) {
+      const chunk = msgpack.decode(blob)
+      trie.add(chunk.topic, chunk)
+    }
+  } catch (error) {
+    console.log(error)
+  }
 }
 
 class LevelPersistence extends EventEmitter {
@@ -41,22 +106,14 @@ class LevelPersistence extends EventEmitter {
     const trie = this._trie
     const that = this
 
-    pump(
-      createValueStream(this._db, SUBSCRIPTIONS),
-      through.obj((blob, enc, cb) => {
-        const chunk = msgpack.decode(blob)
-        trie.add(chunk.topic, chunk)
-        cb()
-      }),
-      err => {
-        if (err) {
-          that.emit('error', err)
-          return
-        }
+    loadSubscriptions(this._db, trie)
+      .then(() => {
         that._ready = true
         that.emit('ready')
-      }
-    )
+      })
+      .catch(err => {
+        that.emit('error', err)
+      })
   }
 
   storeRetained (packet, cb) {
@@ -64,7 +121,7 @@ class LevelPersistence extends EventEmitter {
     if (packet.payload.length === 0) {
       this._db.del(key, cb)
     } else {
-      this._db.put(key, msgpack.encode(packet), cb)
+      this._db.put(key, msgpack.encode(packet), encodingOption, cb)
     }
   }
 
@@ -90,7 +147,6 @@ class LevelPersistence extends EventEmitter {
     })
 
     pump(createValueStream(this._db, RETAINED), res)
-
     return res
   }
 
@@ -111,8 +167,7 @@ class LevelPersistence extends EventEmitter {
       ops.value = msgpack.encode(sub)
       opArray.push(ops)
     })
-
-    this._db.batch(opArray, err => {
+    this._db.batch(opArray, encodingOption, err => {
       cb(err, client)
     })
   }
@@ -129,7 +184,7 @@ class LevelPersistence extends EventEmitter {
       ops.value = msgpack.encode(sub)
       opArray.push(ops)
     })
-    this._db.batch(opArray, err => {
+    this._db.batch(opArray, encodingOption, err => {
       cb(err, client)
     })
   }
@@ -197,7 +252,7 @@ class LevelPersistence extends EventEmitter {
   outgoingEnqueue (sub, packet, cb) {
     const key =
       `${OUTGOING}${sub.clientId}:${packet.brokerId}:${packet.brokerCounter}`
-    this._db.put(key, msgpack.encode(new Packet(packet)), cb)
+    this._db.put(key, msgpack.encode(new Packet(packet)), encodingOption, cb)
   }
 
   outgoingEnqueueCombi (subs, packet, cb) {
@@ -268,7 +323,7 @@ class LevelPersistence extends EventEmitter {
     const key = `${INCOMING}${client.id}:${packet.messageId}`
     const newp = new Packet(packet)
     newp.messageId = packet.messageId
-    this._db.put(key, msgpack.encode(newp), cb)
+    this._db.put(key, msgpack.encode(newp), encodingOption, cb)
   }
 
   incomingGetPacket (client, packet, cb) {
@@ -295,7 +350,7 @@ class LevelPersistence extends EventEmitter {
     packet.brokerId = this.broker.id
     packet.clientId = client.id
 
-    this._db.put(key, msgpack.encode(packet), err => {
+    this._db.put(key, msgpack.encode(packet), encodingOption, err => {
       cb(err, client)
     })
   }
@@ -462,11 +517,11 @@ function updateWithBrokerData (that, client, packet, cb) {
       that._db.del(`${OUTGOINGID}${client.id}:${decoded.messageId}`)
     }
 
-    that._db.put(postkey, msgpack.encode(packet), err => {
+    that._db.put(postkey, msgpack.encode(packet), encodingOption, err => {
       if (err) {
         cb(err, client, packet)
       } else {
-        that._db.put(prekey, msgpack.encode(packet), err => {
+        that._db.put(prekey, msgpack.encode(packet), encodingOption, err => {
           cb(err, client, packet)
         })
       }

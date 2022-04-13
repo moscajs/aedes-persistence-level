@@ -3,10 +3,14 @@ const persistence = require('./')
 // const { LevelPersistence } = require('./persistence')
 // const persistence = db => { return new LevelPersistence(db) }
 const abs = require('aedes-persistence/abstract')
-const level = require('level')
+const { Level } = require('level')
+const level = require('level') // pre Level 8.0.0
 const tempy = require('tempy')
 
 function leveldb () {
+  if (Level) {
+    return new Level(tempy.directory())
+  }
   return level(tempy.directory())
 }
 
