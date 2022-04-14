@@ -78,6 +78,12 @@ async function * dbValuesLevel6 (db, start, opts) {
   }
 }
 
+async function * decodedDbValues (db, start) {
+  for await (const blob of dbValues(db, start)) {
+    yield msgpack.decode(blob)
+  }
+}
+
 async function * multiIterables (iterables) {
   for (const iter of iterables) {
     yield * iter
@@ -85,8 +91,7 @@ async function * multiIterables (iterables) {
 }
 
 async function loadSubscriptions (db, trie) {
-  for await (const blob of dbValues(db, SUBSCRIPTIONS)) {
-    const chunk = msgpack.decode(blob)
+  for await (const chunk of decodedDbValues(db, SUBSCRIPTIONS)) {
     trie.add(chunk.topic, chunk)
   }
 }
@@ -95,8 +100,7 @@ async function * retainedMessagesByPattern (db, pattern) {
   const qlobber = new Qlobber(QlobberOpts)
   qlobber.add(pattern, true)
 
-  for await (const blob of dbValues(db, RETAINED)) {
-    const packet = msgpack.decode(blob)
+  for await (const packet of decodedDbValues(db, RETAINED)) {
     if (qlobber.match(packet.topic).length) {
       yield packet
     }
@@ -105,8 +109,7 @@ async function * retainedMessagesByPattern (db, pattern) {
 
 async function subscriptionsByClient (db, client) {
   const resubs = []
-  for await (const blob of dbValues(db, `${SUBSCRIPTIONS}${client.id}`)) {
-    const sub = msgpack.decode(blob)
+  for await (const sub of decodedDbValues(db, `${SUBSCRIPTIONS}${client.id}`)) {
     const resub = rmClientId(sub)
     resubs.push(resub)
   }
@@ -118,8 +121,7 @@ async function countOfflineClients (db) {
   let subs = 0
   let lastClient = null
 
-  for await (const blob of dbValues(db, SUBSCRIPTIONS)) {
-    const sub = msgpack.decode(blob)
+  for await (const sub of decodedDbValues(db, SUBSCRIPTIONS)) {
     if (lastClient !== sub.clientId) {
       lastClient = sub.clientId
       clients++
@@ -131,17 +133,13 @@ async function countOfflineClients (db) {
   return { subs, clients }
 }
 
-async function * outgoingByClient (db, client) {
+function outgoingByClient (db, client) {
   const key = `${OUTGOING}${client.id}`
-  for await (const blob of dbValues(db, key)) {
-    const packet = msgpack.decode(blob)
-    yield packet
-  }
+  return decodedDbValues(db, key)
 }
 
 async function * willsByBrokers (db, brokers) {
-  for await (const blob of dbValues(db, WILL)) {
-    const chunk = msgpack.decode(blob)
+  for await (const chunk of decodedDbValues(db, WILL)) {
     if (!brokers) {
       yield chunk
     } else {
@@ -153,8 +151,7 @@ async function * willsByBrokers (db, brokers) {
 }
 
 async function * clientListbyTopic (db, topic) {
-  for await (const blob of dbValues(db, SUBSCRIPTIONS)) {
-    const chunk = msgpack.decode(blob)
+  for await (const chunk of decodedDbValues(db, SUBSCRIPTIONS)) {
     if (chunk.topic === topic) {
       yield chunk.clientId
     }
@@ -174,22 +171,41 @@ class LevelPersistence extends EventEmitter {
         that._ready = true
         that.emit('ready')
       })
-      .catch(err => {
+      .catch((err) => {
         that.emit('error', err)
       })
+  }
+
+  // private methods start with _
+  _dbGet (key, cb) {
+    this._db.get(key, encodingOption, (err, blob) => {
+      cb(err, (!err) ? msgpack.decode(blob) : null)
+    })
+  }
+
+  _dbPut (key, value, cb) {
+    this._db.put(key, msgpack.encode(value), encodingOption, cb)
+  }
+
+  _dbDel (key, cb) {
+    this._db.del(key, cb)
+  }
+
+  _dbBatch (opArray, cb) {
+    this._db.batch(opArray, encodingOption, cb)
   }
 
   storeRetained (packet, cb) {
     const key = `${RETAINED}${packet.topic}`
     if (packet.payload.length === 0) {
-      this._db.del(key, cb)
+      this._dbDel(key, cb)
     } else {
-      this._db.put(key, msgpack.encode(packet), encodingOption, cb)
+      this._dbPut(key, packet, cb)
     }
   }
 
   createRetainedStreamCombi (patterns) {
-    const iterables = patterns.map(p => {
+    const iterables = patterns.map((p) => {
       return retainedMessagesByPattern(this._db, p)
     })
     return Readable.from(multiIterables(iterables))
@@ -209,14 +225,14 @@ class LevelPersistence extends EventEmitter {
       .map(withClientId, client)
       .map(addSubToTrie, this._trie)
     const opArray = []
-    subs.forEach(sub => {
+    subs.forEach((sub) => {
       const ops = {}
       ops.type = 'put'
       ops.key = toSubKey(sub)
       ops.value = msgpack.encode(sub)
       opArray.push(ops)
     })
-    this._db.batch(opArray, encodingOption, err => {
+    this._dbBatch(opArray, (err) => {
       cb(err, client)
     })
   }
@@ -226,28 +242,28 @@ class LevelPersistence extends EventEmitter {
       .map(toSubObj, client)
       .map(delSubFromTrie, this._trie)
     const opArray = []
-    subs.forEach(sub => {
+    subs.forEach((sub) => {
       const ops = {}
       ops.type = 'del'
       ops.key = toSubKey(sub)
       ops.value = msgpack.encode(sub)
       opArray.push(ops)
     })
-    this._db.batch(opArray, encodingOption, err => {
+    this._dbBatch(opArray, (err) => {
       cb(err, client)
     })
   }
 
   subscriptionsByClient (client, cb) {
     subscriptionsByClient(this._db, client)
-      .then(resubs => cb(null, resubs, client))
-      .catch(err => cb(err, null, null))
+      .then((resubs) => cb(null, resubs, client))
+      .catch((err) => cb(err, null, null))
   }
 
   countOffline (cb) {
     countOfflineClients(this._db)
-      .then(res => cb(null, res.subs, res.clients))
-      .catch(err => cb(err))
+      .then((res) => cb(null, res.subs, res.clients))
+      .catch((err) => cb(err))
   }
 
   subscriptionsByTopic (pattern, cb) {
@@ -265,10 +281,10 @@ class LevelPersistence extends EventEmitter {
 
       that.removeSubscriptions(
         client,
-        subs.map(sub => {
+        subs.map((sub) => {
           return sub.topic
         }),
-        err => {
+        (err) => {
           cb(err, client)
         }
       )
@@ -278,7 +294,7 @@ class LevelPersistence extends EventEmitter {
   outgoingEnqueue (sub, packet, cb) {
     const key =
       `${OUTGOING}${sub.clientId}:${packet.brokerId}:${packet.brokerCounter}`
-    this._db.put(key, msgpack.encode(new Packet(packet)), encodingOption, cb)
+    this._dbPut(key, new Packet(packet), cb)
   }
 
   outgoingEnqueueCombi (subs, packet, cb) {
@@ -287,7 +303,7 @@ class LevelPersistence extends EventEmitter {
     }
     let count = 0
     for (let i = 0; i < subs.length; i++) {
-      this.outgoingEnqueue(subs[i], packet, err => {
+      this.outgoingEnqueue(subs[i], packet, (err) => {
         if (!err) {
           count++
           if (count === subs.length) {
@@ -303,12 +319,11 @@ class LevelPersistence extends EventEmitter {
   outgoingUpdate (client, packet, cb) {
     const that = this
     if (packet.brokerId) {
-      updateWithBrokerData(this, client, packet, cb)
+      that._updateWithBrokerData(client, packet, cb)
     } else {
-      augmentWithBrokerData(this, client, packet, err => {
+      this._augmentWithBrokerData(client, packet, (err) => {
         if (err) return cb(err, client, packet)
-
-        updateWithBrokerData(that, client, packet, cb)
+        that._updateWithBrokerData(client, packet, cb)
       })
     }
   }
@@ -316,20 +331,19 @@ class LevelPersistence extends EventEmitter {
   outgoingClearMessageId (client, packet, cb) {
     const that = this
     const key = `${OUTGOINGID}${client.id}:${packet.messageId}`
-    this._db.get(key, encodingOption, (err, blob) => {
-      if (err && err.notFound) {
+    this._dbGet(key, (err, packet) => {
+      if (err?.notFound) {
         return cb(null)
       } else if (err) {
         return cb(err)
       }
 
-      const packet = msgpack.decode(blob)
       const prekey =
         `${OUTGOING}${client.id}:${packet.brokerId}:${packet.brokerCounter}`
       const batch = that._db.batch()
       batch.del(key)
       batch.del(prekey)
-      batch.write(err => {
+      batch.write((err) => {
         cb(err, packet)
       })
     })
@@ -343,25 +357,25 @@ class LevelPersistence extends EventEmitter {
     const key = `${INCOMING}${client.id}:${packet.messageId}`
     const newp = new Packet(packet)
     newp.messageId = packet.messageId
-    this._db.put(key, msgpack.encode(newp), encodingOption, cb)
+    this._dbPut(key, newp, cb)
   }
 
   incomingGetPacket (client, packet, cb) {
     const key = `${INCOMING}${client.id}:${packet.messageId}`
-    this._db.get(key, encodingOption, (err, blob) => {
+    this._dbGet(key, (err, packet) => {
       if (err && err.notFound) {
         cb(new Error('no such packet'), client)
       } else if (err) {
         cb(err, client)
       } else {
-        cb(null, msgpack.decode(blob), client)
+        cb(null, packet, client)
       }
     })
   }
 
   incomingDelPacket (client, packet, cb) {
     const key = `${INCOMING}${client.id}:${packet.messageId}`
-    this._db.del(key, cb)
+    this._dbDel(key, cb)
   }
 
   putWill (client, packet, cb) {
@@ -370,18 +384,18 @@ class LevelPersistence extends EventEmitter {
     packet.brokerId = this.broker.id
     packet.clientId = client.id
 
-    this._db.put(key, msgpack.encode(packet), encodingOption, err => {
+    this._dbPut(key, packet, (err) => {
       cb(err, client)
     })
   }
 
   getWill (client, cb) {
     const key = `${WILL}${client.id}`
-    this._db.get(key, encodingOption, (err, blob) => {
+    this._dbGet(key, (err, will) => {
       if (err && err.notFound) {
         cb(null, null, client)
       } else {
-        cb(err, msgpack.decode(blob), client)
+        cb(err, will, client)
       }
     })
   }
@@ -389,12 +403,12 @@ class LevelPersistence extends EventEmitter {
   delWill (client, cb) {
     const key = `${WILL}${client.id}`
     const that = this
-    this._db.get(key, encodingOption, (err, blob) => {
+    this._dbGet(key, (err, will) => {
       if (err) {
         return cb(err, null, client)
       }
-      that._db.del(key, err => {
-        cb(err, msgpack.decode(blob), client)
+      that._dbDel(key, (err) => {
+        cb(err, will, client)
       })
     })
   }
@@ -406,20 +420,52 @@ class LevelPersistence extends EventEmitter {
   getClientList (topic) {
     return Readable.from(clientListbyTopic(this._db, topic))
   }
-  // getClientList(topic) {
-  //   const valueStream = createValueStream(this._db, SUBSCRIPTIONS)
 
-  //   return pump(
-  //     valueStream,
-  //     through.obj(function (blob, enc, cb) {
-  //       const chunk = msgpack.decode(blob)
-  //       if (chunk.topic === topic) {
-  //         this.push(chunk.clientId)
-  //       }
-  //       cb()
-  //     })
-  //   )
-  // }
+  _updateWithBrokerData (client, packet, cb) {
+    const prekey =
+      `${OUTGOING}${client.id}:${packet.brokerId}:${packet.brokerCounter}`
+    const postkey = `${OUTGOINGID}${client.id}:${packet.messageId}`
+    const that = this
+
+    this._dbGet(prekey, (err, decoded) => {
+      if (err && err.notFound) {
+        cb(new Error('no such packet'), client, packet)
+        return
+      } else if (err) {
+        cb(err, client, packet)
+        return
+      }
+
+      if (decoded.messageId > 0) {
+        that._dbDel(`${OUTGOINGID}${client.id}:${decoded.messageId}`)
+      }
+
+      that._dbPut(postkey, packet, (err) => {
+        if (err) {
+          cb(err, client, packet)
+        } else {
+          that._dbPut(prekey, packet, (err) => {
+            cb(err, client, packet)
+          })
+        }
+      })
+    })
+  }
+
+  _augmentWithBrokerData (client, packet, cb) {
+    const postkey = `${OUTGOINGID}${client.id}:${packet.messageId}`
+    this._dbGet(postkey, (err, decoded) => {
+      if (err && err.notFound) {
+        return cb(new Error('no such packet'))
+      } else if (err) {
+        return cb(err)
+      }
+
+      packet.brokerId = decoded.brokerId
+      packet.brokerCounter = decoded.brokerCounter
+      cb(null)
+    })
+  }
 
   destroy (cb) {
     this._db.close(cb)
@@ -498,54 +544,7 @@ function rmClientId (sub) {
   }
 }
 
-function updateWithBrokerData (that, client, packet, cb) {
-  const prekey =
-    `${OUTGOING}${client.id}:${packet.brokerId}:${packet.brokerCounter}`
-  const postkey = `${OUTGOINGID}${client.id}:${packet.messageId}`
-
-  that._db.get(prekey, encodingOption, (err, blob) => {
-    if (err && err.notFound) {
-      cb(new Error('no such packet'), client, packet)
-      return
-    } else if (err) {
-      cb(err, client, packet)
-      return
-    }
-
-    const decoded = msgpack.decode(blob)
-
-    if (decoded.messageId > 0) {
-      that._db.del(`${OUTGOINGID}${client.id}:${decoded.messageId}`)
-    }
-
-    that._db.put(postkey, msgpack.encode(packet), encodingOption, err => {
-      if (err) {
-        cb(err, client, packet)
-      } else {
-        that._db.put(prekey, msgpack.encode(packet), encodingOption, err => {
-          cb(err, client, packet)
-        })
-      }
-    })
-  })
+module.exports = (db) => {
+  return new LevelPersistence(db)
 }
-
-function augmentWithBrokerData (that, client, packet, cb) {
-  const postkey = `${OUTGOINGID}${client.id}:${packet.messageId}`
-  that._db.get(postkey, encodingOption, (err, blob) => {
-    if (err && err.notFound) {
-      return cb(new Error('no such packet'))
-    } else if (err) {
-      return cb(err)
-    }
-
-    const decoded = msgpack.decode(blob)
-
-    packet.brokerId = decoded.brokerId
-    packet.brokerCounter = decoded.brokerCounter
-    cb(null)
-  })
-}
-
-module.exports = db => { return new LevelPersistence(db) }
 module.exports.LevelPersistence = LevelPersistence
