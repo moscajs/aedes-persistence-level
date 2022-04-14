@@ -4,7 +4,7 @@ const net = require('net')
 const port = 1883
 
 const aedes = require('aedes')({
-  persistence: aedesPersistencelevel(Level('./mydb'))
+  persistence: aedesPersistencelevel(new Level('./mydb'))
 })
 const server = net.createServer(aedes.handle)
 
