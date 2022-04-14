@@ -1,11 +1,7 @@
 const Qlobber = require('qlobber').Qlobber
 const Packet = require('aedes-packet')
-const through = require('through2')
 const msgpack = require('msgpack-lite')
-const callbackStream = require('callback-stream')
-const pump = require('pump')
 const EventEmitter = require('events').EventEmitter
-const multistream = require('multistream')
 const { Readable } = require('stream')
 
 const QlobberOpts = {
@@ -20,6 +16,7 @@ const OUTGOING = 'outgoing:'
 const OUTGOINGID = 'outgoing-id:'
 const INCOMING = 'incoming:'
 const WILL = 'will:'
+// in level 8.0.0 'binary' is an alias for 'buffer'
 const encodingOption = {
   valueEncoding: 'binary'
 }
@@ -81,18 +78,86 @@ async function * dbValuesLevel6 (db, start, opts) {
   }
 }
 
-function createValueStream (db, start) {
-  return Readable.from(dbValues(db, start))
+async function * multiIterables (iterables) {
+  for (const iter of iterables) {
+    yield * iter
+  }
 }
 
 async function loadSubscriptions (db, trie) {
-  try {
-    for await (const blob of dbValues(db, SUBSCRIPTIONS)) {
-      const chunk = msgpack.decode(blob)
-      trie.add(chunk.topic, chunk)
+  for await (const blob of dbValues(db, SUBSCRIPTIONS)) {
+    const chunk = msgpack.decode(blob)
+    trie.add(chunk.topic, chunk)
+  }
+}
+
+async function * retainedMessagesByPattern (db, pattern) {
+  const qlobber = new Qlobber(QlobberOpts)
+  qlobber.add(pattern, true)
+
+  for await (const blob of dbValues(db, RETAINED)) {
+    const packet = msgpack.decode(blob)
+    if (qlobber.match(packet.topic).length) {
+      yield packet
     }
-  } catch (error) {
-    console.log(error)
+  }
+}
+
+async function subscriptionsByClient (db, client) {
+  const resubs = []
+  for await (const blob of dbValues(db, `${SUBSCRIPTIONS}${client.id}`)) {
+    const sub = msgpack.decode(blob)
+    const resub = rmClientId(sub)
+    resubs.push(resub)
+  }
+  return ((resubs.length > 0) ? resubs : null)
+}
+
+async function countOfflineClients (db) {
+  let clients = 0
+  let subs = 0
+  let lastClient = null
+
+  for await (const blob of dbValues(db, SUBSCRIPTIONS)) {
+    const sub = msgpack.decode(blob)
+    if (lastClient !== sub.clientId) {
+      lastClient = sub.clientId
+      clients++
+    }
+    if (sub.qos > 0) {
+      subs++
+    }
+  }
+  return { subs, clients }
+}
+
+async function * outgoingByClient (db, client) {
+  const key = `${OUTGOING}${client.id}`
+  for await (const blob of dbValues(db, key)) {
+    const packet = msgpack.decode(blob)
+    yield packet
+  }
+}
+
+async function * willsByBrokers (db, brokers) {
+  for await (const blob of dbValues(db, WILL)) {
+    const chunk = msgpack.decode(blob)
+    if (!brokers) {
+      yield chunk
+    } else {
+      if (!brokers[chunk.brokerId]) {
+        yield chunk
+      }
+    }
+  }
+}
+
+async function * clientListbyTopic (db, topic) {
+  for await (const blob of dbValues(db, SUBSCRIPTIONS)) {
+    const chunk = msgpack.decode(blob)
+    if (chunk.topic === topic) {
+      yield chunk.clientId
+    }
   }
 }
 
@@ -102,11 +167,9 @@ class LevelPersistence extends EventEmitter {
     this._db = db
     this._trie = new Qlobber(QlobberOpts)
     this._ready = false
-
-    const trie = this._trie
     const that = this
 
-    loadSubscriptions(this._db, trie)
+    loadSubscriptions(this._db, this._trie)
       .then(() => {
         that._ready = true
         that.emit('ready')
@@ -126,28 +189,14 @@ class LevelPersistence extends EventEmitter {
   }
 
   createRetainedStreamCombi (patterns) {
-    const that = this
-    const streams = patterns.map(p => {
-      return that.createRetainedStream(p)
+    const iterables = patterns.map(p => {
+      return retainedMessagesByPattern(this._db, p)
     })
-    return multistream.obj(streams)
+    return Readable.from(multiIterables(iterables))
   }
 
   createRetainedStream (pattern) {
-    const qlobber = new Qlobber(QlobberOpts)
-    qlobber.add(pattern, true)
-
-    const res = through.obj((blob, encoding, deliver) => {
-      const packet = msgpack.decode(blob)
-      if (qlobber.match(packet.topic).length) {
-        deliver(null, packet)
-      } else {
-        deliver()
-      }
-    })
-
-    pump(createValueStream(this._db, RETAINED), res)
-    return res
+    return Readable.from(retainedMessagesByPattern(this._db, pattern))
   }
 
   addSubscriptions (client, subs, cb) {
@@ -190,38 +239,15 @@ class LevelPersistence extends EventEmitter {
   }
 
   subscriptionsByClient (client, cb) {
-    createValueStream(this._db, `${SUBSCRIPTIONS}${client.id}`)
-      .pipe(callbackStream({ objectMode: true }, (err, blob) => {
-        const subs = blob.map(msgpack.decode)
-        let resubs = subs.map(rmClientId)
-        if (resubs.length === 0) {
-          resubs = null
-        }
-        cb(err, resubs, client)
-      }))
+    subscriptionsByClient(this._db, client)
+      .then(resubs => cb(null, resubs, client))
+      .catch(err => cb(err, null, null))
   }
 
   countOffline (cb) {
-    let clients = 0
-    let subs = 0
-    let lastClient = null
-    pump(
-      createValueStream(this._db, SUBSCRIPTIONS),
-      through.obj((blob, enc, cb) => {
-        const sub = msgpack.decode(blob)
-        if (lastClient !== sub.clientId) {
-          lastClient = sub.clientId
-          clients++
-        }
-        if (sub.qos > 0) {
-          subs++
-        }
-        cb()
-      }),
-      err => {
-        cb(err, subs, clients)
-      }
-    )
+    countOfflineClients(this._db)
+      .then(res => cb(null, res.subs, res.clients))
+      .catch(err => cb(err))
   }
 
   subscriptionsByTopic (pattern, cb) {
@@ -310,13 +336,7 @@ class LevelPersistence extends EventEmitter {
   }
 
   outgoingStream (client) {
-    const key = `${OUTGOING}${client.id}`
-    return pump(
-      createValueStream(this._db, key),
-      through.obj((blob, enc, cb) => {
-        cb(null, msgpack.decode(blob))
-      })
-    )
+    return Readable.from(outgoingByClient(this._db, client))
   }
 
   incomingStorePacket (client, packet, cb) {
@@ -380,50 +400,31 @@ class LevelPersistence extends EventEmitter {
   }
 
   streamWill (brokers) {
-    const valueStream = createValueStream(this._db, WILL)
-
-    if (!brokers) {
-      return pump(
-        valueStream,
-        through.obj((blob, enc, cb) => {
-          cb(null, msgpack.decode(blob))
-        })
-      )
-    }
-
-    return pump(
-      valueStream,
-      through.obj(function (blob, enc, cb) {
-        const chunk = msgpack.decode(blob)
-        if (!brokers[chunk.brokerId]) {
-          this.push(chunk)
-        }
-        cb()
-      })
-    )
+    return Readable.from(willsByBrokers(this._db, brokers))
   }
 
   getClientList (topic) {
-    const valueStream = createValueStream(this._db, SUBSCRIPTIONS)
-
-    return pump(
-      valueStream,
-      through.obj(function (blob, enc, cb) {
-        const chunk = msgpack.decode(blob)
-        if (chunk.topic === topic) {
-          this.push(chunk.clientId)
-        }
-        cb()
-      })
-    )
+    return Readable.from(clientListbyTopic(this._db, topic))
   }
+  // getClientList(topic) {
+  //   const valueStream = createValueStream(this._db, SUBSCRIPTIONS)
+
+  //   return pump(
+  //     valueStream,
+  //     through.obj(function (blob, enc, cb) {
+  //       const chunk = msgpack.decode(blob)
+  //       if (chunk.topic === topic) {
+  //         this.push(chunk.clientId)
+  //       }
+  //       cb()
+  //     })
+  //   )
+  // }
 
   destroy (cb) {
     this._db.close(cb)
   }
 }
-
-// inherits(LevelPersistence, EventEmitter)
 
 function withClientId (sub) {
   return {
