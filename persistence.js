@@ -38,7 +38,6 @@ function dbValues (db, start) {
 }
 
 async function * dbValuesLevel7 (db, start, opts) {
-  console.log('level7', typeof db.iterator)
   for await (const [, value] of db.iterator(opts)) {
     yield value
   }
@@ -63,8 +62,6 @@ function endLevel6 (iter) {
 }
 
 async function * dbValuesLevel6 (db, start, opts) {
-  console.log('level6', typeof db.iterator)
-
   const iter = db.iterator(opts)
   let hasValue = true
   while (hasValue) {
