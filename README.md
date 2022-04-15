@@ -23,11 +23,11 @@ The first parameter is an instance of [levelup][levelup].
 Example:
 
 ```js
-var level = require('level')
-var aedesPersistencelevel = require('aedes-persistence-level')
+const { Level } = require('level') // Level >= 8.0.0 is required 
+const aedesPersistencelevel = require('aedes-persistence-level')
 
 // instantiate a persistence instance
-aedesPersistencelevel(level('./mydb'))
+aedesPersistencelevel(new Level('./mydb'))
 ```
 
 ## License

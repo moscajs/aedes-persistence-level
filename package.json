@@ -3,6 +3,9 @@
   "version": "7.0.0",
   "description": "LevelDB persistence for Aedes",
   "main": "persistence.js",
+  "engines": {
+    "node": ">=14.0.0"
+  },
   "scripts": {
     "test": "standard && tape test.js | faucet",
     "release": "read -p 'GITHUB_TOKEN: ' GITHUB_TOKEN && export GITHUB_TOKEN=$GITHUB_TOKEN && release-it --disable-metrics"
@@ -46,21 +49,18 @@
     "aedes-persistence": "^8.1.1",
     "concat-stream": "^2.0.0",
     "faucet": "0.0.1",
-    "level": "^6.0.1",
-    "tempy": "^0.7.1",
+    "level": "^8.0.0",
     "mqemitter": "^4.4.0",
     "pre-commit": "^1.2.2",
+    "release-it": "^14.0.3",
     "standard": "^14.3.4",
     "tape": "^4.13.3",
-    "release-it": "^14.0.3"
+    "tempy": "^0.7.1",
+    "through2": "^4.0.2"
   },
   "dependencies": {
     "aedes-packet": "^2.3.1",
-    "callback-stream": "^1.1.0",
     "msgpack-lite": "^0.1.26",
-    "multistream": "^4.0.0",
-    "pump": "^3.0.0",
-    "qlobber": "^5.0.3",
-    "through2": "^4.0.2"
+    "qlobber": "^5.0.3"
   }
 }

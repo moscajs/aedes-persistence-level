@@ -1,30 +1,28 @@
-'use strict'
-
-var test = require('tape').test
-var persistence = require('./')
-var abs = require('aedes-persistence/abstract')
-var level = require('level')
-var tempy = require('tempy')
+const test = require('tape').test
+const persistence = require('./')
+const abs = require('aedes-persistence/abstract')
+const { Level } = require('level') // Level >= 8.0.0
+const tempy = require('tempy')
 
 function leveldb () {
-  return level(tempy.directory())
+  return new Level(tempy.directory())
 }
 
 abs({
-  test: test,
-  persistence: function () {
+  test,
+  persistence () {
     return persistence(leveldb())
   }
 })
 
-test('restore', function (t) {
-  var db = leveldb()
-  var instance = persistence(db)
-  var client = {
+test('restore', t => {
+  const db = leveldb()
+  const instance = persistence(db)
+  const client = {
     id: 'abcde'
   }
 
-  var subs = [{
+  const subs = [{
     topic: 'hello',
     qos: 1
   }, {
@@ -35,10 +33,10 @@ test('restore', function (t) {
     qos: 1
   }]
 
-  instance.addSubscriptions(client, subs, function (err) {
+  instance.addSubscriptions(client, subs, err => {
     t.notOk(err, 'no error')
-    var instance2 = persistence(db)
-    instance2.subscriptionsByTopic('hello', function (err, resubs) {
+    const instance2 = persistence(db)
+    instance2.subscriptionsByTopic('hello', (err, resubs) => {
       t.notOk(err, 'no error')
       t.deepEqual(resubs, [{
         clientId: client.id,
@@ -54,18 +52,18 @@ test('restore', function (t) {
   })
 })
 
-test('outgoing update after enqueuing a possible offline message', function (t) {
-  var db = leveldb()
-  var instance = persistence(db)
-  var client = {
+test('outgoing update after enqueuing a possible offline message', t => {
+  const db = leveldb()
+  const instance = persistence(db)
+  const client = {
     clientId: 'abcde'
   }
 
-  var client1 = {
+  const client1 = {
     id: 'abcde'
   }
 
-  var packet = {
+  const packet = {
     cmd: 'publish',
     brokerId: 'adasdasd',
     brokerCounter: 0,
@@ -74,18 +72,18 @@ test('outgoing update after enqueuing a possible offline message', function (t) 
     messageId: 7
   }
 
-  var updatePacket = {
+  const updatePacket = {
     cmd: 'pubrel',
     messageId: 7
   }
   // Enqueue an offline packet
-  instance.outgoingEnqueue(client, packet, function (err, packet1) {
+  instance.outgoingEnqueue(client, packet, (err, packet1) => {
     t.error(err)
     // When the client comes back online, aedes calls emptyQueue which calls outgoingUpdate
-    instance.outgoingUpdate(client1, packet, function (err, client, packet) {
+    instance.outgoingUpdate(client1, packet, (err, client, packet) => {
       t.notOk(err, 'no error')
       // When pubrel is published, outgoingUpdate is called again without the broker Id
-      instance.outgoingUpdate(client, updatePacket, function (err, client, packet) {
+      instance.outgoingUpdate(client, updatePacket, (err, client, packet) => {
         t.notOk(err, 'no error')
         instance.destroy(t.end.bind(t))
       })
@@ -93,32 +91,32 @@ test('outgoing update after enqueuing a possible offline message', function (t) 
   })
 })
 
-test('Dont replace subscriptions with different QoS if client id is different', function (t) {
-  var db = leveldb()
-  var instance = persistence(db)
-  var client = {
+test('Dont replace subscriptions with different QoS if client id is different', t => {
+  const db = leveldb()
+  const instance = persistence(db)
+  const client = {
     id: 'test'
   }
 
-  var client1 = {
+  const client1 = {
     id: 'test.1'
   }
 
-  var sub1 = [{
+  const sub1 = [{
     topic: 'test/+/dev/#',
     qos: 2
   }]
 
-  var sub2 = [{
+  const sub2 = [{
     topic: 'test/television/dev/about',
     qos: 1
   }]
 
-  instance.addSubscriptions(client, sub1, function (err) {
+  instance.addSubscriptions(client, sub1, err => {
     t.notOk(err, 'no error')
-    instance.addSubscriptions(client1, sub2, function (err) {
+    instance.addSubscriptions(client1, sub2, err => {
       t.notOk(err, 'no error')
-      instance.subscriptionsByTopic('test/television/dev/about', function (err, resubs) {
+      instance.subscriptionsByTopic('test/television/dev/about', (err, resubs) => {
         t.notOk(err, 'no error')
         t.deepEqual(resubs, [{
           topic: 'test/television/dev/about',
@@ -135,28 +133,28 @@ test('Dont replace subscriptions with different QoS if client id is different', 
   })
 })
 
-test('Replace subscriptions with different QoS if client id is same', function (t) {
-  var db = leveldb()
-  var instance = persistence(db)
-  var client = {
+test('Replace subscriptions with different QoS if client id is same', t => {
+  const db = leveldb()
+  const instance = persistence(db)
+  const client = {
     id: 'test'
   }
 
-  var sub1 = [{
+  const sub1 = [{
     topic: 'test/+/dev/#',
     qos: 2
   }]
 
-  var sub2 = [{
+  const sub2 = [{
     topic: 'test/television/dev/about',
     qos: 1
   }]
 
-  instance.addSubscriptions(client, sub1, function (err) {
+  instance.addSubscriptions(client, sub1, err => {
     t.notOk(err, 'no error')
-    instance.addSubscriptions(client, sub2, function (err) {
+    instance.addSubscriptions(client, sub2, err => {
       t.notOk(err, 'no error')
-      instance.subscriptionsByTopic('test/television/dev/about', function (err, resubs) {
+      instance.subscriptionsByTopic('test/television/dev/about', (err, resubs) => {
         t.notOk(err, 'no error')
         t.deepEqual(resubs, [{
           topic: 'test/television/dev/about',

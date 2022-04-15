@@ -1,29 +1,27 @@
-'use strict'
+const { Level } = require('level')
+const aedesPersistencelevel = require('.')
+const net = require('net')
+const port = 1883
 
-var level = require('level')
-var aedesPersistencelevel = require('.')
-var net = require('net')
-var port = 1883
-
-var aedes = require('aedes')({
-  persistence: aedesPersistencelevel(level('./mydb'))
+const aedes = require('aedes')({
+  persistence: aedesPersistencelevel(new Level('./mydb'))
 })
-var server = net.createServer(aedes.handle)
+const server = net.createServer(aedes.handle)
 
-server.listen(port, function () {
+server.listen(port, () => {
   console.log('server listening on port', port)
 })
 
-aedes.on('clientError', function (client, err) {
+aedes.on('clientError', (client, err) => {
   console.log('client error', client.id, err.message, err.stack)
 })
 
-aedes.on('publish', function (packet, client) {
+aedes.on('publish', (packet, client) => {
   if (client) {
     console.log('message from client', client.id)
   }
 })
 
-aedes.on('client', function (client) {
+aedes.on('client', client => {
   console.log('new client', client.id)
 })
