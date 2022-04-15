@@ -18,65 +18,15 @@ const INCOMING = 'incoming:'
 const WILL = 'will:'
 // in level 8.0.0 'binary' is an alias for 'buffer'
 const encodingOption = {
-  valueEncoding: 'binary'
+  valueEncoding: 'buffer'
 }
 
-function dbValues (db, start) {
+async function * decodedDbValues (db, start) {
   const opts = Object.assign({
     gt: start,
     lt: `${start}\xff`
   }, encodingOption)
-  // Level 8
-  if (typeof db.values === 'function') {
-    return db.values(opts)
-  }
-  // level 7
-  if (Symbol.iterator in db.iterator) {
-    return dbValuesLevel7(db, start, opts)
-  }
-  return dbValuesLevel6(db, start, opts)
-}
-
-async function * dbValuesLevel7 (db, start, opts) {
-  for await (const [, value] of db.iterator(opts)) {
-    yield value
-  }
-}
-
-function nextLevel6 (iter) {
-  return new Promise((resolve, reject) => {
-    iter.next((err, key, value) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve({ key, value })
-    })
-  })
-}
-
-function endLevel6 (iter) {
-  return new Promise((resolve, reject) => {
-    iter.end(resolve, reject)
-  })
-}
-
-async function * dbValuesLevel6 (db, start, opts) {
-  const iter = db.iterator(opts)
-  let hasValue = true
-  while (hasValue) {
-    const item = await nextLevel6(iter)
-    if (item?.value) {
-      yield item.value
-    } else {
-      await endLevel6(iter)
-      hasValue = false
-    }
-  }
-}
-
-async function * decodedDbValues (db, start) {
-  for await (const blob of dbValues(db, start)) {
+  for await (const blob of db.values(opts)) {
     yield msgpack.decode(blob)
   }
 }

@@ -23,7 +23,7 @@ The first parameter is an instance of [levelup][levelup].
 Example:
 
 ```js
-const { Level } = require('level') // Level 8.0.0
+const { Level } = require('level') // Level >= 8.0.0 is required 
 const aedesPersistencelevel = require('aedes-persistence-level')
 
 // instantiate a persistence instance

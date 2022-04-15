@@ -1,15 +1,11 @@
 const test = require('tape').test
 const persistence = require('./')
 const abs = require('aedes-persistence/abstract')
-const { Level } = require('level') // Level 8.0.0
-const level = require('level') // pre Level 8.0.0
+const { Level } = require('level') // Level >= 8.0.0
 const tempy = require('tempy')
 
 function leveldb () {
-  if (Level) {
-    return new Level(tempy.directory())
-  }
-  return level(tempy.directory())
+  return new Level(tempy.directory())
 }
 
 abs({
