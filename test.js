@@ -2,10 +2,20 @@ const test = require('tape').test
 const persistence = require('./')
 const abs = require('aedes-persistence/abstract')
 const { Level } = require('level') // Level >= 8.0.0
-const tempy = require('tempy')
+
+const { randomUUID } = require('crypto')
+const { tmpdir } = require('os')
+const { join } = require('path')
+const { mkdirSync } = require('fs')
+
+function tempDir () {
+  const dir = join(tmpdir(), 'aedes-persistence-level-test', randomUUID())
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
 
 function leveldb () {
-  return new Level(tempy.directory())
+  return new Level(tempDir())
 }
 
 abs({
