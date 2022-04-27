@@ -53,7 +53,7 @@
     "mqemitter": "^4.5.0",
     "pre-commit": "^1.2.2",
     "release-it": "^14.14.2",
-    "standard": "^16.0.4",
+    "standard": "^17.0.0",
     "tape": "^4.13.3",
     "through2": "^4.0.2"
   },
