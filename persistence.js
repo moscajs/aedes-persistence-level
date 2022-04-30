@@ -110,12 +110,15 @@ class LevelPersistence extends EventEmitter {
   #db
   #trie
   #ready
+  #keyPadLength
 
   constructor (db) {
     super()
     this.#db = db
     this.#trie = new Qlobber(QlobberOpts)
     this.#ready = false
+    // Number.MAX_SAFE_INTEGER has a length of 16 digits
+    this.#keyPadLength = 16
     const that = this
 
     loadSubscriptions(this.#db, this.#trie)
@@ -126,6 +129,10 @@ class LevelPersistence extends EventEmitter {
       .catch((err) => {
         that.emit('error', err)
       })
+  }
+
+  #padId (id) {
+    return id?.toString().padStart(this.#keyPadLength, '0')
   }
 
   #dbGet (key, cb) {
@@ -244,7 +251,7 @@ class LevelPersistence extends EventEmitter {
 
   outgoingEnqueue (sub, packet, cb) {
     const key =
-      `${OUTGOING}${sub.clientId}:${packet.brokerId}:${packet.brokerCounter}`
+      `${OUTGOING}${sub.clientId}:${packet.brokerId}:${this.#padId(packet.brokerCounter)}`
     this.#dbPut(key, new Packet(packet), cb)
   }
 
@@ -281,7 +288,7 @@ class LevelPersistence extends EventEmitter {
 
   outgoingClearMessageId (client, packet, cb) {
     const that = this
-    const key = `${OUTGOINGID}${client.id}:${packet.messageId}`
+    const key = `${OUTGOINGID}${client.id}:${this.#padId(packet.messageId)}`
     this.#dbGet(key, (err, packet) => {
       if (err?.notFound) {
         return cb(null)
@@ -290,7 +297,7 @@ class LevelPersistence extends EventEmitter {
       }
 
       const prekey =
-        `${OUTGOING}${client.id}:${packet.brokerId}:${packet.brokerCounter}`
+        `${OUTGOING}${client.id}:${packet.brokerId}:${this.#padId(packet.brokerCounter)}`
       const batch = that.#db.batch()
       batch.del(key)
       batch.del(prekey)
@@ -305,14 +312,14 @@ class LevelPersistence extends EventEmitter {
   }
 
   incomingStorePacket (client, packet, cb) {
-    const key = `${INCOMING}${client.id}:${packet.messageId}`
+    const key = `${INCOMING}${client.id}:${this.#padId(packet.messageId)}`
     const newp = new Packet(packet)
     newp.messageId = packet.messageId
     this.#dbPut(key, newp, cb)
   }
 
   incomingGetPacket (client, packet, cb) {
-    const key = `${INCOMING}${client.id}:${packet.messageId}`
+    const key = `${INCOMING}${client.id}:${this.#padId(packet.messageId)}`
     this.#dbGet(key, (err, packet) => {
       if (err && err.notFound) {
         cb(new Error('no such packet'), client)
@@ -325,7 +332,7 @@ class LevelPersistence extends EventEmitter {
   }
 
   incomingDelPacket (client, packet, cb) {
-    const key = `${INCOMING}${client.id}:${packet.messageId}`
+    const key = `${INCOMING}${client.id}:${this.#padId(packet.messageId)}`
     this.#dbDel(key, cb)
   }
 
@@ -374,8 +381,8 @@ class LevelPersistence extends EventEmitter {
 
   #updateWithBrokerData (client, packet, cb) {
     const prekey =
-      `${OUTGOING}${client.id}:${packet.brokerId}:${packet.brokerCounter}`
-    const postkey = `${OUTGOINGID}${client.id}:${packet.messageId}`
+      `${OUTGOING}${client.id}:${packet.brokerId}:${this.#padId(packet.brokerCounter)}`
+    const postkey = `${OUTGOINGID}${client.id}:${this.#padId(packet.messageId)}`
     const that = this
 
     this.#dbGet(prekey, (err, decoded) => {
@@ -404,7 +411,7 @@ class LevelPersistence extends EventEmitter {
   }
 
   #augmentWithBrokerData (client, packet, cb) {
-    const postkey = `${OUTGOINGID}${client.id}:${packet.messageId}`
+    const postkey = `${OUTGOINGID}${client.id}:${this.#padId(packet.messageId)}`
     this.#dbGet(postkey, (err, decoded) => {
       if (err && err.notFound) {
         return cb(new Error('no such packet'))
