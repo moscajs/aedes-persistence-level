@@ -21,10 +21,6 @@ const encodingOption = {
   valueEncoding: 'buffer'
 }
 
-function encode (id) {
-  return encodeURIComponent(id)
-}
-
 async function * decodedDbValues (db, start) {
   const opts = Object.assign({
     gt: start,
@@ -60,7 +56,7 @@ async function * retainedMessagesByPattern (db, pattern) {
 
 async function subscriptionsByClient (db, client) {
   const resubs = []
-  for await (const sub of decodedDbValues(db, `${SUBSCRIPTIONS}${encode(client.id)}`)) {
+  for await (const sub of decodedDbValues(db, subByClientKey(client.id))) {
     const resub = rmClientId(sub)
     resubs.push(resub)
   }
@@ -84,11 +80,6 @@ async function countOfflineClients (db) {
   return { subs, clients }
 }
 
-function outgoingByClient (db, client) {
-  const key = `${OUTGOING}${encode(client.id)}`
-  return decodedDbValues(db, key)
-}
-
 async function * willsByBrokers (db, brokers) {
   for await (const chunk of decodedDbValues(db, WILL)) {
     if (!brokers) {
@@ -109,6 +100,36 @@ async function * clientListbyTopic (db, topic) {
   }
 }
 
+// Number.MAX_SAFE_INTEGER has a length of 16 digits
+// by padding the ID we ensure correct sorting in the queue
+function padId (id) {
+  return id?.toString().padStart(16, '0')
+}
+
+function outgoingKey (clientId, brokerId, brokerCounter) {
+  return `${OUTGOING}${encodeURIComponent(clientId)}:${brokerId}:${padId(brokerCounter)}`
+}
+
+function outgoingByClientKey (clientId) {
+  return `${OUTGOING}${encodeURIComponent(clientId)}`
+}
+
+function outgoingByIdKey (clientId, messageId) {
+  return `${OUTGOINGID}${encodeURIComponent(clientId)}:${padId(messageId)}`
+}
+
+function incomingKey (clientId, messageId) {
+  return `${INCOMING}${encodeURIComponent(clientId)}:${padId(messageId)}`
+}
+
+function willKey (clientId) {
+  return `${WILL}${encodeURIComponent(clientId)}`
+}
+
+function subByClientKey (clientId) {
+  return `${SUBSCRIPTIONS}${encodeURIComponent(clientId)}`
+}
+
 class LevelPersistence extends EventEmitter {
   // private class members start with #
   #db
@@ -121,7 +142,7 @@ class LevelPersistence extends EventEmitter {
     this.#db = db
     this.#trie = new Qlobber(QlobberOpts)
     this.#ready = false
-    // Number.MAX_SAFE_INTEGER has a length of 16 digits
+
     this.#keyPadLength = 16
     const that = this
 
@@ -133,10 +154,6 @@ class LevelPersistence extends EventEmitter {
       .catch((err) => {
         that.emit('error', err)
       })
-  }
-
-  #padId (id) {
-    return id?.toString().padStart(this.#keyPadLength, '0')
   }
 
   #dbGet (key, cb) {
@@ -254,8 +271,7 @@ class LevelPersistence extends EventEmitter {
   }
 
   outgoingEnqueue (sub, packet, cb) {
-    const key =
-      `${OUTGOING}${sub.clientId}:${packet.brokerId}:${this.#padId(packet.brokerCounter)}`
+    const key = outgoingKey(sub.clientId, packet.brokerId, packet.brokerCounter)
     this.#dbPut(key, new Packet(packet), cb)
   }
 
@@ -292,7 +308,7 @@ class LevelPersistence extends EventEmitter {
 
   outgoingClearMessageId (client, packet, cb) {
     const that = this
-    const key = `${OUTGOINGID}${encode(client.id)}:${this.#padId(packet.messageId)}`
+    const key = outgoingByIdKey(client.id, packet.messageId)
     this.#dbGet(key, (err, packet) => {
       if (err?.notFound) {
         return cb(null)
@@ -300,8 +316,7 @@ class LevelPersistence extends EventEmitter {
         return cb(err)
       }
 
-      const prekey =
-        `${OUTGOING}${encode(client.id)}:${packet.brokerId}:${this.#padId(packet.brokerCounter)}`
+      const prekey = outgoingKey(client.id, packet.brokerId, packet.brokerCounter)
       const batch = that.#db.batch()
       batch.del(key)
       batch.del(prekey)
@@ -312,18 +327,21 @@ class LevelPersistence extends EventEmitter {
   }
 
   outgoingStream (client) {
-    return Readable.from(outgoingByClient(this.#db, client))
+    return Readable.from(decodedDbValues(
+      this.#db,
+      outgoingByClientKey(client.id)
+    ))
   }
 
   incomingStorePacket (client, packet, cb) {
-    const key = `${INCOMING}${encode(client.id)}:${this.#padId(packet.messageId)}`
+    const key = incomingKey(client.id, packet.messageId)
     const newp = new Packet(packet)
     newp.messageId = packet.messageId
     this.#dbPut(key, newp, cb)
   }
 
   incomingGetPacket (client, packet, cb) {
-    const key = `${INCOMING}${encode(client.id)}:${this.#padId(packet.messageId)}`
+    const key = incomingKey(client.id, packet.messageId)
     this.#dbGet(key, (err, packet) => {
       if (err && err.notFound) {
         cb(new Error('no such packet'), client)
@@ -336,12 +354,12 @@ class LevelPersistence extends EventEmitter {
   }
 
   incomingDelPacket (client, packet, cb) {
-    const key = `${INCOMING}${encode(client.id)}:${this.#padId(packet.messageId)}`
+    const key = incomingKey(client.id, packet.messageId)
     this.#dbDel(key, cb)
   }
 
   putWill (client, packet, cb) {
-    const key = `${WILL}${encode(client.id)}`
+    const key = willKey(client.id)
 
     packet.brokerId = this.broker.id
     packet.clientId = client.id
@@ -352,7 +370,7 @@ class LevelPersistence extends EventEmitter {
   }
 
   getWill (client, cb) {
-    const key = `${WILL}${encode(client.id)}`
+    const key = willKey(client.id)
     this.#dbGet(key, (err, will) => {
       if (err && err.notFound) {
         cb(null, null, client)
@@ -363,7 +381,7 @@ class LevelPersistence extends EventEmitter {
   }
 
   delWill (client, cb) {
-    const key = `${WILL}${encode(client.id)}`
+    const key = willKey(client.id)
     const that = this
     this.#dbGet(key, (err, will) => {
       if (err) {
@@ -384,9 +402,8 @@ class LevelPersistence extends EventEmitter {
   }
 
   #updateWithBrokerData (client, packet, cb) {
-    const prekey =
-      `${OUTGOING}${encode(client.id)}:${packet.brokerId}:${this.#padId(packet.brokerCounter)}`
-    const postkey = `${OUTGOINGID}${encode(client.id)}:${this.#padId(packet.messageId)}`
+    const prekey = outgoingKey(client.id, packet.brokerId, packet.brokerCounter)
+    const postkey = outgoingByIdKey(client.id, packet.messageId)
     const that = this
 
     this.#dbGet(prekey, (err, decoded) => {
@@ -399,7 +416,7 @@ class LevelPersistence extends EventEmitter {
       }
 
       if (decoded.messageId > 0) {
-        that.#dbDel(`${OUTGOINGID}${encode(client.id)}:${decoded.messageId}`)
+        that.#dbDel(outgoingByIdKey(client.id, decoded.messageId))
       }
 
       that.#dbPut(postkey, packet, (err) => {
@@ -415,7 +432,7 @@ class LevelPersistence extends EventEmitter {
   }
 
   #augmentWithBrokerData (client, packet, cb) {
-    const postkey = `${OUTGOINGID}${encode(client.id)}:${this.#padId(packet.messageId)}`
+    const postkey = outgoingByIdKey(client.id, packet.messageId)
     this.#dbGet(postkey, (err, decoded) => {
       if (err && err.notFound) {
         return cb(new Error('no such packet'))
@@ -443,7 +460,7 @@ function withClientId (sub) {
 }
 
 function toSubKey (sub) {
-  return `${SUBSCRIPTIONS}${sub.clientId}:${sub.topic}`
+  return `${subByClientKey(sub.clientId)}:${sub.topic}`
 }
 
 function addSubToTrie (sub) {
