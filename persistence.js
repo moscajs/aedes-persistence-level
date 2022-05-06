@@ -1,8 +1,8 @@
-const { Qlobber } = require('qlobber')
 const Packet = require('aedes-packet')
 const msgpack = require('msgpack-lite')
 const { EventEmitter } = require('events')
 const { Readable } = require('stream')
+const QlobberSub = require('qlobber/aedes/qlobber-sub')
 const { QlobberTrue } = require('qlobber')
 
 const QlobberOpts = {
@@ -140,7 +140,7 @@ class LevelPersistence extends EventEmitter {
   constructor (db) {
     super()
     this.#db = db
-    this.#trie = new Qlobber(QlobberOpts)
+    this.#trie = new QlobberSub(QlobberOpts)
     this.#ready = false
 
     const that = this
