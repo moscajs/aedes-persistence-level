@@ -3,6 +3,7 @@ const Packet = require('aedes-packet')
 const msgpack = require('msgpack-lite')
 const { EventEmitter } = require('events')
 const { Readable } = require('stream')
+const { QlobberTrue } = require('qlobber')
 
 const QlobberOpts = {
   wildcard_one: '+',
@@ -44,11 +45,11 @@ async function loadSubscriptions (db, trie) {
 }
 
 async function * retainedMessagesByPattern (db, pattern) {
-  const qlobber = new Qlobber(QlobberOpts)
-  qlobber.add(pattern, true)
+  const qlobber = new QlobberTrue(QlobberOpts)
+  qlobber.add(pattern)
 
   for await (const packet of decodedDbValues(db, RETAINED)) {
-    if (qlobber.match(packet.topic).length) {
+    if (qlobber.test(packet.topic)) {
       yield packet
     }
   }
