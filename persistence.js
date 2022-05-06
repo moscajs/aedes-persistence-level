@@ -135,7 +135,6 @@ class LevelPersistence extends EventEmitter {
   #db
   #trie
   #ready
-  #keyPadLength
 
   constructor (db) {
     super()
@@ -143,7 +142,6 @@ class LevelPersistence extends EventEmitter {
     this.#trie = new Qlobber(QlobberOpts)
     this.#ready = false
 
-    this.#keyPadLength = 16
     const that = this
 
     loadSubscriptions(this.#db, this.#trie)
