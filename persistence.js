@@ -1,7 +1,7 @@
-const Qlobber = require('qlobber').Qlobber
+const { Qlobber } = require('qlobber')
 const Packet = require('aedes-packet')
 const msgpack = require('msgpack-lite')
-const EventEmitter = require('events').EventEmitter
+const { EventEmitter } = require('events')
 const { Readable } = require('stream')
 
 const QlobberOpts = {
