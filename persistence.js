@@ -204,7 +204,7 @@ class LevelPersistence extends EventEmitter {
     }
 
     const opArray = []
-    subs.forEach((subscription) => {
+    for (const subscription of subs) {
       const sub = Object.assign({}, subscription)
       sub.clientId = client.id
       addSubToTrie(this.#trie, sub)
@@ -214,7 +214,7 @@ class LevelPersistence extends EventEmitter {
         value: msgpack.encode(sub)
       }
       opArray.push(ops)
-    })
+    }
     this.#dbBatch(opArray, (err) => {
       cb(err, client)
     })
@@ -222,7 +222,7 @@ class LevelPersistence extends EventEmitter {
 
   removeSubscriptions (client, topics, cb) {
     const opArray = []
-    topics.forEach((topic) => {
+    for (const topic of topics) {
       const sub = {
         clientId: client.id,
         topic
@@ -233,7 +233,7 @@ class LevelPersistence extends EventEmitter {
         key: toSubKey(sub)
       }
       opArray.push(ops)
-    })
+    }
     this.#dbBatch(opArray, (err) => {
       cb(err, client)
     })
