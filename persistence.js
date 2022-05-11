@@ -58,6 +58,7 @@ async function * retainedMessagesByPattern (db, pattern) {
 async function subscriptionsByClient (db, client) {
   const resubs = []
   for await (const sub of decodedDbValues(db, subByClientKey(client.id))) {
+    // remove clientId from sub
     const { clientId, ...resub } = sub
     resubs.push(resub)
   }
