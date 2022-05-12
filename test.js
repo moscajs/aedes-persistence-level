@@ -51,11 +51,17 @@ test('restore', t => {
       t.deepEqual(resubs, [{
         clientId: client.id,
         topic: 'hello/#',
-        qos: 1
+        qos: 1,
+        rh: undefined,
+        rap: undefined,
+        nl: undefined
       }, {
         clientId: client.id,
         topic: 'hello',
-        qos: 1
+        qos: 1,
+        rh: undefined,
+        rap: undefined,
+        nl: undefined
       }])
       instance.destroy(t.end.bind(t))
     })
@@ -131,11 +137,17 @@ test('Dont replace subscriptions with different QoS if client id is different', 
         t.deepEqual(resubs, [{
           topic: 'test/television/dev/about',
           clientId: 'test.1',
-          qos: 1
+          qos: 1,
+          rh: undefined,
+          rap: undefined,
+          nl: undefined
         }, {
           topic: 'test/+/dev/#',
           clientId: 'test',
-          qos: 2
+          qos: 2,
+          rh: undefined,
+          rap: undefined,
+          nl: undefined
         }])
         instance.destroy(t.end.bind(t))
       })
@@ -169,7 +181,10 @@ test('Replace subscriptions with different QoS if client id is same', t => {
         t.deepEqual(resubs, [{
           topic: 'test/television/dev/about',
           clientId: 'test',
-          qos: 1
+          qos: 1,
+          rh: undefined,
+          rap: undefined,
+          nl: undefined
         }])
         instance.destroy(t.end.bind(t))
       })

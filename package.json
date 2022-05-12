@@ -46,20 +46,20 @@
   "homepage": "https://github.com/mcollina/aedes-persistence-level#readme",
   "devDependencies": {
     "aedes": "^0.46.3",
-    "aedes-persistence": "^9.0.3",
+    "aedes-persistence": "^9.1.1",
     "concat-stream": "^2.0.0",
     "faucet": "0.0.1",
     "level": "^8.0.0",
     "mqemitter": "^4.5.0",
     "pre-commit": "^1.2.2",
-    "release-it": "^14.14.2",
+    "release-it": "^15.0.0",
     "standard": "^17.0.0",
-    "tape": "^4.13.3",
+    "tape": "^5.5.3",
     "through2": "^4.0.2"
   },
   "dependencies": {
-    "aedes-packet": "^2.3.1",
+    "aedes-packet": "^3.0.0",
     "msgpack-lite": "^0.1.26",
-    "qlobber": "^6.0.0"
+    "qlobber": "^7.0.0"
   }
 }
