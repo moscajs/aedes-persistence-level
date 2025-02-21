@@ -1,4 +1,4 @@
-const test = require('tape').test
+const { test } = require('tape')
 const persistence = require('./')
 const abs = require('aedes-persistence/abstract')
 const { Level } = require('level') // Level >= 8.0.0
