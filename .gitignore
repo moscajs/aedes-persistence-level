@@ -30,3 +30,4 @@ node_modules
 mydb
 
 package-lock.json
+.tap/

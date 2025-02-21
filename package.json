@@ -7,7 +7,7 @@
     "node": ">=14.0.0"
   },
   "scripts": {
-    "test": "standard && tape test.js | faucet",
+    "test": "standard && tap test.js",
     "release": "read -p 'GITHUB_TOKEN: ' GITHUB_TOKEN && export GITHUB_TOKEN=$GITHUB_TOKEN && release-it --disable-metrics"
   },
   "release-it": {
@@ -45,21 +45,17 @@
   },
   "homepage": "https://github.com/mcollina/aedes-persistence-level#readme",
   "devDependencies": {
-    "aedes": "^0.46.3",
-    "aedes-persistence": "^9.1.1",
-    "concat-stream": "^2.0.0",
-    "faucet": "0.0.1",
+    "aedes": "^0.51.3",
+    "aedes-persistence": "^9.1.2",
     "level": "^9.0.0",
-    "mqemitter": "^4.5.0",
     "pre-commit": "^1.2.2",
-    "release-it": "^15.0.0",
-    "standard": "^17.0.0",
-    "tape": "^5.5.3",
-    "through2": "^4.0.2"
+    "release-it": "^18.1.2",
+    "standard": "^17.1.2",
+    "tap": "^21.1.0"
   },
   "dependencies": {
     "aedes-packet": "^3.0.0",
     "msgpack-lite": "^0.1.26",
-    "qlobber": "^7.0.0"
+    "qlobber": "^8.0.1"
   }
 }
