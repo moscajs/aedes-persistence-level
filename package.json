@@ -45,10 +45,10 @@
   },
   "homepage": "https://github.com/mcollina/aedes-persistence-level#readme",
   "devDependencies": {
+    "@fastify/pre-commit": "^2.2.0",
     "aedes": "^0.51.3",
     "aedes-persistence": "^9.1.2",
     "level": "^9.0.0",
-    "pre-commit": "^1.2.2",
     "release-it": "^18.1.2",
     "standard": "^17.1.2"
   },
