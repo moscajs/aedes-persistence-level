@@ -4,10 +4,13 @@
   "description": "LevelDB persistence for Aedes",
   "main": "persistence.js",
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
-    "test": "standard && tape test.js | faucet",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "unit": "node --test test.js",
+    "test": "npm run lint && npm run unit",
     "release": "read -p 'GITHUB_TOKEN: ' GITHUB_TOKEN && export GITHUB_TOKEN=$GITHUB_TOKEN && release-it --disable-metrics"
   },
   "release-it": {
@@ -47,16 +50,15 @@
   "devDependencies": {
     "@fastify/pre-commit": "^2.2.0",
     "aedes": "^0.51.3",
-    "aedes-persistence": "^9.1.2",
+    "aedes-persistence": "^10.0.0",
+    "eslint": "^9.21.0",
     "level": "^9.0.0",
-    "release-it": "^18.1.2",
-    "standard": "^17.1.2"
+    "neostandard": "^0.12.1",
+    "release-it": "^18.1.2"
   },
   "dependencies": {
     "aedes-packet": "^3.0.0",
-    "faucet": "^0.0.4",
     "msgpack-lite": "^0.1.26",
-    "qlobber": "^8.0.1",
-    "tape": "^5.9.0"
+    "qlobber": "^8.0.1"
   }
 }
