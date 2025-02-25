@@ -1,12 +1,13 @@
-const { test } = require('tape')
+const test = require('node:test')
+const assert = require('node:assert/strict')
 const persistence = require('./')
 const abs = require('aedes-persistence/abstract')
 const { Level } = require('level') // Level >= 8.0.0
 
-const { randomUUID } = require('crypto')
-const { tmpdir } = require('os')
-const { join } = require('path')
-const { mkdirSync } = require('fs')
+const { randomUUID } = require('node:crypto')
+const { tmpdir } = require('node:os')
+const { join } = require('node:path')
+const { mkdirSync } = require('node:fs')
 
 function tempDir () {
   const dir = join(tmpdir(), 'aedes-persistence-level-test', randomUUID())
@@ -44,11 +45,11 @@ test('restore', t => {
   }]
 
   instance.addSubscriptions(client, subs, err => {
-    t.notOk(err, 'no error')
+    assert.ok(!err, 'no error')
     const instance2 = persistence(db)
     instance2.subscriptionsByTopic('hello', (err, resubs) => {
-      t.notOk(err, 'no error')
-      t.deepEqual(resubs, [{
+      assert.ok(!err, 'no error')
+      assert.deepEqual(resubs, [{
         clientId: client.id,
         topic: 'hello/#',
         qos: 1,
@@ -63,7 +64,7 @@ test('restore', t => {
         rap: undefined,
         nl: undefined
       }])
-      instance.destroy(t.end.bind(t))
+      instance.destroy()
     })
   })
 })
@@ -94,14 +95,14 @@ test('outgoing update after enqueuing a possible offline message', t => {
   }
   // Enqueue an offline packet
   instance.outgoingEnqueue(client, packet, (err, packet1) => {
-    t.error(err)
+    assert.ifError(err)
     // When the client comes back online, aedes calls emptyQueue which calls outgoingUpdate
     instance.outgoingUpdate(client1, packet, (err, client, packet) => {
-      t.notOk(err, 'no error')
+      assert.ok(!err, 'no error')
       // When pubrel is published, outgoingUpdate is called again without the broker Id
       instance.outgoingUpdate(client, updatePacket, (err, client, packet) => {
-        t.notOk(err, 'no error')
-        instance.destroy(t.end.bind(t))
+        assert.ok(!err, 'no error')
+        instance.destroy()
       })
     })
   })
@@ -129,12 +130,12 @@ test('Dont replace subscriptions with different QoS if client id is different', 
   }]
 
   instance.addSubscriptions(client, sub1, err => {
-    t.notOk(err, 'no error')
+    assert.ok(!err, 'no error')
     instance.addSubscriptions(client1, sub2, err => {
-      t.notOk(err, 'no error')
+      assert.ok(!err, 'no error')
       instance.subscriptionsByTopic('test/television/dev/about', (err, resubs) => {
-        t.notOk(err, 'no error')
-        t.deepEqual(resubs, [{
+        assert.ok(!err, 'no error')
+        assert.deepEqual(resubs, [{
           topic: 'test/television/dev/about',
           clientId: 'test.1',
           qos: 1,
@@ -149,7 +150,7 @@ test('Dont replace subscriptions with different QoS if client id is different', 
           rap: undefined,
           nl: undefined
         }])
-        instance.destroy(t.end.bind(t))
+        instance.destroy()
       })
     })
   })
@@ -173,12 +174,12 @@ test('Replace subscriptions with different QoS if client id is same', t => {
   }]
 
   instance.addSubscriptions(client, sub1, err => {
-    t.notOk(err, 'no error')
+    assert.ok(!err, 'no error')
     instance.addSubscriptions(client, sub2, err => {
-      t.notOk(err, 'no error')
+      assert.ok(!err, 'no error')
       instance.subscriptionsByTopic('test/television/dev/about', (err, resubs) => {
-        t.notOk(err, 'no error')
-        t.deepEqual(resubs, [{
+        assert.ok(!err, 'no error')
+        assert.deepEqual(resubs, [{
           topic: 'test/television/dev/about',
           clientId: 'test',
           qos: 1,
@@ -186,7 +187,7 @@ test('Replace subscriptions with different QoS if client id is same', t => {
           rap: undefined,
           nl: undefined
         }])
-        instance.destroy(t.end.bind(t))
+        instance.destroy()
       })
     })
   })
