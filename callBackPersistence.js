@@ -25,7 +25,6 @@ class CallBackPersistence extends EventEmitter {
     if (this.ready) {
       return
     }
-    this.asyncPersistence.broker = this._broker
     // this.asyncPersistence._trie = this._trie
     this.asyncPersistence.setup()
       .then(() => {
@@ -38,11 +37,11 @@ class CallBackPersistence extends EventEmitter {
   }
 
   get broker () {
-    return this._broker
+    return this.asyncPersistence.broker
   }
 
   set broker (broker) {
-    this._broker = broker
+    this.asyncPersistence.broker = broker
     this._setup()
   }
 
