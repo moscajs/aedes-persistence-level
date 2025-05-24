@@ -1,6 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const persistence = require('./')
+const persistence = require('../persistence.js')
 const abs = require('aedes-persistence/abstract')
 const { Level } = require('level') // Level >= 8.0.0
 
