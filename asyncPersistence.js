@@ -4,7 +4,7 @@ const { Readable } = require('node:stream')
 const QlobberSub = require('qlobber/aedes/qlobber-sub')
 const { QlobberTrue } = require('qlobber')
 
-const QlobberOpts = {
+const QLOBBER_OPTIONS = {
   wildcard_one: '+',
   wildcard_some: '#',
   separator: '/',
@@ -45,7 +45,7 @@ async function loadSubscriptions (db, trie) {
 }
 
 async function * retainedMessagesByPattern (db, pattern) {
-  const qlobber = new QlobberTrue(QlobberOpts)
+  const qlobber = new QlobberTrue(QLOBBER_OPTIONS)
   qlobber.add(pattern)
 
   for await (const packet of decodedDbValues(db, RETAINED)) {
@@ -143,10 +143,11 @@ class AsyncLevelPersistence {
 
   constructor (db) {
     this.#db = db
-    this.#trie = new QlobberSub(QlobberOpts)
+    this.#trie = new QlobberSub(QLOBBER_OPTIONS)
   }
 
-  async setup () {
+  async setup (broker) {
+    this.broker = broker
     await loadSubscriptions(this.#db, this.#trie)
   }
 
@@ -234,6 +235,14 @@ class AsyncLevelPersistence {
   async subscriptionsByTopic (pattern) {
     const subs = this.#trie.match(pattern)
     return subs
+  }
+
+  async cleanSubscriptions (client) {
+    const subs = await this.subscriptionsByClient(client)
+    if (subs.length > 0) {
+      const remSubs = subs.map(sub => sub.topic)
+      await this.removeSubscriptions(client, remSubs)
+    }
   }
 
   async outgoingEnqueue (sub, packet) {
