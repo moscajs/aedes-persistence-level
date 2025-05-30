@@ -140,14 +140,20 @@ class AsyncLevelPersistence {
   // private class members start with #
   #db
   #trie
+  #broker
 
   constructor (db) {
     this.#db = db
     this.#trie = new QlobberSub(QLOBBER_OPTIONS)
   }
 
+  // access to #broker, only for testing
+  get broker () {
+    return this.#broker
+  }
+
   async setup (broker) {
-    this.broker = broker
+    this.#broker = broker
     await loadSubscriptions(this.#db, this.#trie)
   }
 
@@ -315,7 +321,7 @@ class AsyncLevelPersistence {
 
   async putWill (client, packet) {
     const key = willKey(client.id)
-    packet.brokerId = this.broker?.id
+    packet.brokerId = this.#broker?.id
     packet.clientId = client.id
     await this.#dbPut(key, packet)
   }
