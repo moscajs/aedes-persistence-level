@@ -60,7 +60,7 @@
   },
   "dependencies": {
     "aedes-packet": "^3.0.0",
-    "aedes-persistence": "^10.2.0",
+    "aedes-persistence": "^10.2.1",
     "msgpack-lite": "^0.1.26",
     "qlobber": "^8.0.1"
   }
