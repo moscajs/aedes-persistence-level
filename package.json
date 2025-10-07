@@ -15,22 +15,6 @@
     "coverage:report": "c8 report",
     "release": "read -p 'GITHUB_TOKEN: ' GITHUB_TOKEN && export GITHUB_TOKEN=$GITHUB_TOKEN && release-it --disable-metrics"
   },
-  "release-it": {
-    "github": {
-      "release": true
-    },
-    "git": {
-      "tagName": "v${version}"
-    },
-    "hooks": {
-      "before:init": [
-        "npm run test"
-      ]
-    },
-    "npm": {
-      "publish": true
-    }
-  },
   "precommit": "test",
   "repository": {
     "type": "git",
