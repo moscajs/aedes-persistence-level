@@ -339,7 +339,7 @@ class AsyncLevelPersistence {
     const key = willKey(client.id)
     const will = await this.#dbGet(key)
     if (will === LEVEL_NOT_FOUND) {
-      throw new Error('Will not found')
+      return
     }
     await this.#dbDel(key)
     return will
