@@ -192,3 +192,84 @@ test('Replace subscriptions with different QoS if client id is same', t => {
     })
   })
 })
+
+// The shared abstract suite only cleans between ids that share no prefix
+// ('abcde' / 'fghij'), so it never exercises the key-range isolation this
+// store's cleanIncoming depends on.
+test('cleanIncoming leaves clients with a colliding id prefix alone', async () => {
+  const instance = persistence(leveldb())
+  const packet = {
+    cmd: 'publish',
+    topic: 'hello',
+    payload: Buffer.from('world'),
+    qos: 2,
+    dup: false,
+    length: 14,
+    retain: false,
+    messageId: 42
+  }
+  const target = { id: 'abc' }
+  // 'abcde' shares the prefix; the other two probe the ':' delimiter, which
+  // only stays unambiguous because encodeURIComponent escapes it
+  const survivors = [{ id: 'abcde' }, { id: 'abc:x' }, { id: 'abc%3Ax' }]
+
+  for (const client of [target, ...survivors]) {
+    await instance.incomingStorePacket(client, packet)
+  }
+  await instance.cleanIncoming(target)
+
+  await assert.rejects(
+    instance.incomingGetPacket(target, { messageId: packet.messageId }),
+    'target packet was removed'
+  )
+  for (const client of survivors) {
+    const stored = await instance.incomingGetPacket(client, { messageId: packet.messageId })
+    assert.equal(stored.messageId, packet.messageId, `${client.id} packet survived`)
+  }
+  await instance.destroy()
+})
+
+// Same key-range isolation, for the two per-client prefixes that are read back
+// rather than cleared. Without the ':' these scans hand one client another
+// client's state.
+test('subscriptionsByClient does not return a prefix-colliding client subs', async () => {
+  const instance = persistence(leveldb())
+  const target = { id: 'abc' }
+  const other = { id: 'abcde' }
+
+  await instance.addSubscriptions(target, [{ topic: 'own/topic', qos: 1, rh: 0, rap: true, nl: false }])
+  await instance.addSubscriptions(other, [{ topic: 'other/topic', qos: 1, rh: 0, rap: true, nl: false }])
+
+  const subs = await instance.subscriptionsByClient(target)
+  assert.deepEqual(subs.map(s => s.topic), ['own/topic'])
+
+  await instance.destroy()
+})
+
+test('outgoingStream does not stream a prefix-colliding client queue', async () => {
+  const instance = persistence(leveldb())
+  const target = { id: 'abc' }
+  const other = { id: 'abcde' }
+  const mkPacket = (topic, brokerCounter) => ({
+    cmd: 'publish',
+    topic,
+    payload: Buffer.from('world'),
+    qos: 1,
+    dup: false,
+    length: 14,
+    retain: false,
+    brokerId: 'broker-1',
+    brokerCounter
+  })
+
+  await instance.outgoingEnqueue({ clientId: target.id, topic: 'own/topic', qos: 1 }, mkPacket('own/topic', 1))
+  await instance.outgoingEnqueue({ clientId: other.id, topic: 'other/topic', qos: 1 }, mkPacket('other/topic', 2))
+
+  const topics = []
+  for await (const packet of instance.outgoingStream(target)) {
+    topics.push(packet.topic)
+  }
+  assert.deepEqual(topics, ['own/topic'])
+
+  await instance.destroy()
+})
