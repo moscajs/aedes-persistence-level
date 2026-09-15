@@ -120,8 +120,14 @@ function outgoingByIdKey (clientId, messageId) {
   return `${OUTGOINGID}${encodeURIComponent(clientId)}:${padId(messageId)}`
 }
 
+function incomingByClientKey (clientId) {
+  // trailing ':' keeps the range from spilling into a client whose id has this
+  // one as a prefix (`abc` vs `abcde`)
+  return `${INCOMING}${encodeURIComponent(clientId)}:`
+}
+
 function incomingKey (clientId, messageId) {
-  return `${INCOMING}${encodeURIComponent(clientId)}:${padId(messageId)}`
+  return `${incomingByClientKey(clientId)}${padId(messageId)}`
 }
 
 function willKey (clientId) {
@@ -171,6 +177,10 @@ class AsyncLevelPersistence {
 
   async #dbDel (key) {
     await this.#db.del(key)
+  }
+
+  async #dbClear (range) {
+    await this.#db.clear(range)
   }
 
   async #dbBatch (opArray) {
@@ -317,6 +327,11 @@ class AsyncLevelPersistence {
   async incomingDelPacket (client, packet) {
     const key = incomingKey(client.id, packet.messageId)
     await this.#dbDel(key)
+  }
+
+  async cleanIncoming (client) {
+    const start = incomingByClientKey(client.id)
+    await this.#dbClear({ gte: start, lt: `${start}\xff` })
   }
 
   async putWill (client, packet) {
