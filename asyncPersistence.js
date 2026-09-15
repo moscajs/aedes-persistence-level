@@ -23,15 +23,15 @@ const encodingOption = {
 const LEVEL_NOT_FOUND = 'LEVEL_NOT_FOUND'
 
 // Range over every key under `prefix`, which always ends with the ':' key
-// separator. The upper bound swaps that separator for its byte successor.
-// Appending '\xff' would not do: keys are compared as UTF-8 bytes and '\xff'
+// separator. The upper bound swaps that ':' for ';', the next byte — nothing
+// sorts between them, so the range is exactly the keys under the prefix.
+// Appending '\xff' would not do: keys compare as UTF-8 bytes and '\xff'
 // (U+00FF) encodes to C3 BF, so a suffix starting any higher — every
 // non-ASCII topic — sorts past the bound and would be skipped.
 function prefixRange (prefix) {
-  const sep = prefix.charCodeAt(prefix.length - 1)
   return {
     gte: prefix,
-    lt: `${prefix.slice(0, -1)}${String.fromCharCode(sep + 1)}`
+    lt: `${prefix.slice(0, -1)};`
   }
 }
 
@@ -121,7 +121,6 @@ function padId (id) {
 // Every `*ByClientKey` ends with the ':' delimiter, so a range over it cannot
 // spill into a client whose id has this one as a prefix (`abc` vs `abcde`).
 // ':' is unambiguous because encodeURIComponent escapes it to %3A inside an id.
-// Callers append the rest of the key directly — never another ':'.
 function outgoingByClientKey (clientId) {
   return `${OUTGOING}${encodeURIComponent(clientId)}:`
 }
