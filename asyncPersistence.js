@@ -22,12 +22,16 @@ const encodingOption = {
 }
 const LEVEL_NOT_FOUND = 'LEVEL_NOT_FOUND'
 
-// every key we store under a prefix continues with ASCII (padded ids, broker
-// ids, topics), so '\xff' is above any suffix we can produce
+// Range over every key under `prefix`, which always ends with the ':' key
+// separator. The upper bound swaps that separator for its byte successor.
+// Appending '\xff' would not do: keys are compared as UTF-8 bytes and '\xff'
+// (U+00FF) encodes to C3 BF, so a suffix starting any higher — every
+// non-ASCII topic — sorts past the bound and would be skipped.
 function prefixRange (prefix) {
+  const sep = prefix.charCodeAt(prefix.length - 1)
   return {
     gte: prefix,
-    lt: `${prefix}\xff`
+    lt: `${prefix.slice(0, -1)}${String.fromCharCode(sep + 1)}`
   }
 }
 

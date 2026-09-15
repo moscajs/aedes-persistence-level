@@ -273,3 +273,56 @@ test('outgoingStream does not stream a prefix-colliding client queue', async () 
 
   await instance.destroy()
 })
+
+// MQTT topics are UTF-8, and they are stored raw after the key prefix. A range
+// bounded by '\xff' (bytes C3 BF) stops short of any topic starting above
+// U+00FF, which silently hides those rows from every per-prefix scan.
+const NON_ASCII_TOPICS = ['ascii/a', 'é/x', 'ÿ/x', 'Ā/x', 'тема', '主题', '😀/x']
+
+test('subscriptions on non-ascii topics are readable and removable', async () => {
+  const dir = tempDir()
+  let instance = persistence(new Level(dir))
+  await instance.setup({ id: 'broker-1' })
+  const client = { id: 'abc' }
+  const subs = NON_ASCII_TOPICS.map(topic => ({ topic, qos: 1, rh: 0, rap: true, nl: false }))
+
+  await instance.addSubscriptions(client, subs)
+  const stored = await instance.subscriptionsByClient(client)
+  assert.deepEqual(stored.map(s => s.topic).sort(), [...NON_ASCII_TOPICS].sort())
+
+  // a row the per-client scan cannot see is also a row cleanSubscriptions
+  // cannot delete: it would survive teardown and come back via loadSubscriptions
+  await instance.cleanSubscriptions(client)
+  assert.deepEqual(await instance.subscriptionsByClient(client), [])
+  await instance.destroy()
+
+  instance = persistence(new Level(dir))
+  await instance.setup({ id: 'broker-1' })
+  assert.deepEqual(await instance.subscriptionsByTopic('тема'), [], 'no subscription revived')
+  await instance.destroy()
+})
+
+test('retained messages on non-ascii topics are streamed', async () => {
+  const instance = persistence(leveldb())
+  const mkRetained = topic => ({
+    cmd: 'publish',
+    topic,
+    payload: Buffer.from('world'),
+    qos: 0,
+    dup: false,
+    length: 14,
+    retain: true
+  })
+
+  for (const topic of NON_ASCII_TOPICS) {
+    await instance.storeRetained(mkRetained(topic))
+  }
+
+  const streamed = []
+  for await (const packet of instance.createRetainedStream('#')) {
+    streamed.push(packet.topic)
+  }
+  assert.deepEqual(streamed.sort(), [...NON_ASCII_TOPICS].sort())
+
+  await instance.destroy()
+})
