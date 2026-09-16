@@ -22,11 +22,21 @@ const encodingOption = {
 }
 const LEVEL_NOT_FOUND = 'LEVEL_NOT_FOUND'
 
+// Range over every key under `prefix`, which always ends with the ':' key
+// separator. The upper bound swaps that ':' for ';', the next byte — nothing
+// sorts between them, so the range is exactly the keys under the prefix.
+// Appending '\xff' would not do: keys compare as UTF-8 bytes and '\xff'
+// (U+00FF) encodes to C3 BF, so a suffix starting any higher — every
+// non-ASCII topic — sorts past the bound and would be skipped.
+function prefixRange (prefix) {
+  return {
+    gte: prefix,
+    lt: `${prefix.slice(0, -1)};`
+  }
+}
+
 async function * decodedDbValues (db, start) {
-  const opts = Object.assign({
-    gt: start,
-    lt: `${start}\xff`
-  }, encodingOption)
+  const opts = Object.assign(prefixRange(start), encodingOption)
   for await (const blob of db.values(opts)) {
     yield msgpack.decode(blob)
   }
@@ -108,20 +118,27 @@ function padId (id) {
   return id?.toString().padStart(16, '0')
 }
 
-function outgoingKey (clientId, brokerId, brokerCounter) {
-  return `${OUTGOING}${encodeURIComponent(clientId)}:${brokerId}:${padId(brokerCounter)}`
+// Every `*ByClientKey` ends with the ':' delimiter, so a range over it cannot
+// spill into a client whose id has this one as a prefix (`abc` vs `abcde`).
+// ':' is unambiguous because encodeURIComponent escapes it to %3A inside an id.
+function outgoingByClientKey (clientId) {
+  return `${OUTGOING}${encodeURIComponent(clientId)}:`
 }
 
-function outgoingByClientKey (clientId) {
-  return `${OUTGOING}${encodeURIComponent(clientId)}`
+function outgoingKey (clientId, brokerId, brokerCounter) {
+  return `${outgoingByClientKey(clientId)}${brokerId}:${padId(brokerCounter)}`
 }
 
 function outgoingByIdKey (clientId, messageId) {
   return `${OUTGOINGID}${encodeURIComponent(clientId)}:${padId(messageId)}`
 }
 
+function incomingByClientKey (clientId) {
+  return `${INCOMING}${encodeURIComponent(clientId)}:`
+}
+
 function incomingKey (clientId, messageId) {
-  return `${INCOMING}${encodeURIComponent(clientId)}:${padId(messageId)}`
+  return `${incomingByClientKey(clientId)}${padId(messageId)}`
 }
 
 function willKey (clientId) {
@@ -129,11 +146,11 @@ function willKey (clientId) {
 }
 
 function subByClientKey (clientId) {
-  return `${SUBSCRIPTIONS}${encodeURIComponent(clientId)}`
+  return `${SUBSCRIPTIONS}${encodeURIComponent(clientId)}:`
 }
 
 function toSubKey (sub) {
-  return `${subByClientKey(sub.clientId)}:${sub.topic}`
+  return `${subByClientKey(sub.clientId)}${sub.topic}`
 }
 
 class AsyncLevelPersistence {
@@ -171,6 +188,10 @@ class AsyncLevelPersistence {
 
   async #dbDel (key) {
     await this.#db.del(key)
+  }
+
+  async #dbClear (range) {
+    await this.#db.clear(range)
   }
 
   async #dbBatch (opArray) {
@@ -317,6 +338,10 @@ class AsyncLevelPersistence {
   async incomingDelPacket (client, packet) {
     const key = incomingKey(client.id, packet.messageId)
     await this.#dbDel(key)
+  }
+
+  async cleanIncoming (client) {
+    await this.#dbClear(prefixRange(incomingByClientKey(client.id)))
   }
 
   async putWill (client, packet) {

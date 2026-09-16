@@ -192,3 +192,137 @@ test('Replace subscriptions with different QoS if client id is same', t => {
     })
   })
 })
+
+// The shared abstract suite only cleans between ids that share no prefix
+// ('abcde' / 'fghij'), so it never exercises the key-range isolation this
+// store's cleanIncoming depends on.
+test('cleanIncoming leaves clients with a colliding id prefix alone', async () => {
+  const instance = persistence(leveldb())
+  const packet = {
+    cmd: 'publish',
+    topic: 'hello',
+    payload: Buffer.from('world'),
+    qos: 2,
+    dup: false,
+    length: 14,
+    retain: false,
+    messageId: 42
+  }
+  const target = { id: 'abc' }
+  // 'abcde' shares the prefix; the other two probe the ':' delimiter, which
+  // only stays unambiguous because encodeURIComponent escapes it
+  const survivors = [{ id: 'abcde' }, { id: 'abc:x' }, { id: 'abc%3Ax' }]
+
+  for (const client of [target, ...survivors]) {
+    await instance.incomingStorePacket(client, packet)
+  }
+  await instance.cleanIncoming(target)
+
+  await assert.rejects(
+    instance.incomingGetPacket(target, { messageId: packet.messageId }),
+    'target packet was removed'
+  )
+  for (const client of survivors) {
+    const stored = await instance.incomingGetPacket(client, { messageId: packet.messageId })
+    assert.equal(stored.messageId, packet.messageId, `${client.id} packet survived`)
+  }
+  await instance.destroy()
+})
+
+// Same key-range isolation, for the two per-client prefixes that are read back
+// rather than cleared. Without the ':' these scans hand one client another
+// client's state.
+test('subscriptionsByClient does not return a prefix-colliding client subs', async () => {
+  const instance = persistence(leveldb())
+  const target = { id: 'abc' }
+  const other = { id: 'abcde' }
+
+  await instance.addSubscriptions(target, [{ topic: 'own/topic', qos: 1, rh: 0, rap: true, nl: false }])
+  await instance.addSubscriptions(other, [{ topic: 'other/topic', qos: 1, rh: 0, rap: true, nl: false }])
+
+  const subs = await instance.subscriptionsByClient(target)
+  assert.deepEqual(subs.map(s => s.topic), ['own/topic'])
+
+  await instance.destroy()
+})
+
+test('outgoingStream does not stream a prefix-colliding client queue', async () => {
+  const instance = persistence(leveldb())
+  const target = { id: 'abc' }
+  const other = { id: 'abcde' }
+  const mkPacket = (topic, brokerCounter) => ({
+    cmd: 'publish',
+    topic,
+    payload: Buffer.from('world'),
+    qos: 1,
+    dup: false,
+    length: 14,
+    retain: false,
+    brokerId: 'broker-1',
+    brokerCounter
+  })
+
+  await instance.outgoingEnqueue({ clientId: target.id, topic: 'own/topic', qos: 1 }, mkPacket('own/topic', 1))
+  await instance.outgoingEnqueue({ clientId: other.id, topic: 'other/topic', qos: 1 }, mkPacket('other/topic', 2))
+
+  const topics = []
+  for await (const packet of instance.outgoingStream(target)) {
+    topics.push(packet.topic)
+  }
+  assert.deepEqual(topics, ['own/topic'])
+
+  await instance.destroy()
+})
+
+// MQTT topics are UTF-8, and they are stored raw after the key prefix. A range
+// bounded by '\xff' (bytes C3 BF) stops short of any topic starting above
+// U+00FF, which silently hides those rows from every per-prefix scan.
+const NON_ASCII_TOPICS = ['ascii/a', 'é/x', 'ÿ/x', 'Ā/x', 'тема', '主题', '😀/x']
+
+test('subscriptions on non-ascii topics are readable and removable', async () => {
+  const dir = tempDir()
+  let instance = persistence(new Level(dir))
+  await instance.setup({ id: 'broker-1' })
+  const client = { id: 'abc' }
+  const subs = NON_ASCII_TOPICS.map(topic => ({ topic, qos: 1, rh: 0, rap: true, nl: false }))
+
+  await instance.addSubscriptions(client, subs)
+  const stored = await instance.subscriptionsByClient(client)
+  assert.deepEqual(stored.map(s => s.topic).sort(), [...NON_ASCII_TOPICS].sort())
+
+  // a row the per-client scan cannot see is also a row cleanSubscriptions
+  // cannot delete: it would survive teardown and come back via loadSubscriptions
+  await instance.cleanSubscriptions(client)
+  assert.deepEqual(await instance.subscriptionsByClient(client), [])
+  await instance.destroy()
+
+  instance = persistence(new Level(dir))
+  await instance.setup({ id: 'broker-1' })
+  assert.deepEqual(await instance.subscriptionsByTopic('тема'), [], 'no subscription revived')
+  await instance.destroy()
+})
+
+test('retained messages on non-ascii topics are streamed', async () => {
+  const instance = persistence(leveldb())
+  const mkRetained = topic => ({
+    cmd: 'publish',
+    topic,
+    payload: Buffer.from('world'),
+    qos: 0,
+    dup: false,
+    length: 14,
+    retain: true
+  })
+
+  for (const topic of NON_ASCII_TOPICS) {
+    await instance.storeRetained(mkRetained(topic))
+  }
+
+  const streamed = []
+  for await (const packet of instance.createRetainedStream('#')) {
+    streamed.push(packet.topic)
+  }
+  assert.deepEqual(streamed.sort(), [...NON_ASCII_TOPICS].sort())
+
+  await instance.destroy()
+})
